@@ -16,8 +16,8 @@ func TestNewProblemRepository_ValidDir(t *testing.T) {
 	if repo == nil {
 		t.Fatal("expected repo to be non-nil")
 	}
-	if repo.Count() != 20 {
-		t.Errorf("expected 20 problems, got %d", repo.Count())
+	if repo.Count() != 25 {
+		t.Errorf("expected 25 problems, got %d", repo.Count())
 	}
 }
 
@@ -118,8 +118,8 @@ func TestGetAll_NoFilter(t *testing.T) {
 	}
 
 	problems := repo.GetAll("", "", nil)
-	if len(problems) != 20 {
-			t.Errorf("expected 20 problems, got %d", len(problems))
+	if len(problems) != 25 {
+			t.Errorf("expected 25 problems, got %d", len(problems))
 	}
 
 	// Check sorting: easy first, then medium
@@ -135,8 +135,8 @@ func TestGetAll_FilterByDifficulty(t *testing.T) {
 	}
 
 	easy := repo.GetAll("easy", "", nil)
-	if len(easy) != 7 {
-		t.Errorf("expected 7 easy problems, got %d", len(easy))
+	if len(easy) != 9 {
+		t.Errorf("expected 9 easy problems, got %d", len(easy))
 	}
 	for _, p := range easy {
 		if p.Difficulty != "easy" {
@@ -145,13 +145,13 @@ func TestGetAll_FilterByDifficulty(t *testing.T) {
 	}
 
 	medium := repo.GetAll("medium", "", nil)
-	if len(medium) != 7 {
-		t.Errorf("expected 7 medium problems, got %d", len(medium))
+	if len(medium) != 9 {
+		t.Errorf("expected 9 medium problems, got %d", len(medium))
 	}
 
 	hard := repo.GetAll("hard", "", nil)
-	if len(hard) != 6 {
-		t.Errorf("expected 6 hard problems, got %d", len(hard))
+	if len(hard) != 7 {
+		t.Errorf("expected 7 hard problems, got %d", len(hard))
 	}
 }
 
@@ -162,8 +162,8 @@ func TestGetAll_FilterByCategory(t *testing.T) {
 	}
 
 	arrayProbs := repo.GetAll("", "array", nil)
-	if len(arrayProbs) != 9 {
-		t.Errorf("expected 9 array problems, got %d", len(arrayProbs))
+	if len(arrayProbs) != 12 {
+		t.Errorf("expected 12 array problems, got %d", len(arrayProbs))
 	}
 }
 
@@ -175,8 +175,8 @@ func TestGetAll_FilterByTags(t *testing.T) {
 
 	// Filter by single tag
 	backtracking := repo.GetAll("", "", []string{"backtracking"})
-	if len(backtracking) != 3 {
-		t.Errorf("expected 3 backtracking problems, got %d", len(backtracking))
+	if len(backtracking) != 4 {
+		t.Errorf("expected 4 backtracking problems, got %d", len(backtracking))
 	}
 
 	// Filter by multiple tags (AND logic)
@@ -193,8 +193,8 @@ func TestGetAll_FilterByTags(t *testing.T) {
 
 	// Case-insensitive tags
 	caseInsensitive := repo.GetAll("", "", []string{"BACKTRACKING"})
-	if len(caseInsensitive) != 3 {
-		t.Errorf("expected 3 problems with case-insensitive tag, got %d", len(caseInsensitive))
+	if len(caseInsensitive) != 4 {
+		t.Errorf("expected 4 problems with case-insensitive tag, got %d", len(caseInsensitive))
 	}
 
 	// Non-existent tag
@@ -205,8 +205,8 @@ func TestGetAll_FilterByTags(t *testing.T) {
 
 	// Empty tag list should return all
 	all := repo.GetAll("", "", []string{})
-	if len(all) != 20 {
-		t.Errorf("expected 20 problems with empty tag filter, got %d", len(all))
+	if len(all) != 25 {
+		t.Errorf("expected 25 problems with empty tag filter, got %d", len(all))
 	}
 }
 
@@ -283,8 +283,8 @@ func TestCount(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if repo.Count() != 20 {
-		t.Errorf("expected count 20, got %d", repo.Count())
+	if repo.Count() != 25 {
+		t.Errorf("expected count 25, got %d", repo.Count())
 	}
 }
 

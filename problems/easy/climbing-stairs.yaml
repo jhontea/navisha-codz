@@ -1,0 +1,87 @@
+id: "climbing-stairs"
+title: "Climbing Stairs"
+type: "function"
+difficulty: "easy"
+category: "dynamic-programming"
+tags: ["dynamic-programming", "math"]
+
+description: |
+  You are climbing a staircase. It takes `n` steps to reach the top.
+
+  Each time you can either climb 1 or 2 steps. In how many distinct
+  ways can you climb to the top?
+
+function_name: "climbStairs"
+parameters:
+  - name: "n"
+    type: "int"
+    description: "Number of steps to reach the top"
+return_type: "int"
+
+examples:
+  - input: "n = 2"
+    output: "2"
+    explanation: "There are two ways to climb to the top: 1+1, 2."
+  - input: "n = 3"
+    output: "3"
+    explanation: "There are three ways: 1+1+1, 1+2, 2+1."
+
+hints:
+  - level: 1
+    title: "Think recursively"
+    content: "To reach step n, you could have come from step n-1 (one step) or step n-2 (two steps). Can you express the number of ways recursively?"
+  - level: 2
+    title: "Fibonacci pattern"
+    content: "The number of ways to reach step n is the sum of ways to reach step n-1 and step n-2. This is exactly the Fibonacci sequence."
+  - level: 3
+    title: "DP with O(1) space"
+    content: |
+      Base cases: f(1) = 1, f(2) = 2.
+      For i from 3 to n: f(i) = f(i-1) + f(i-2).
+      Use two variables to track previous two values instead of a full array.
+
+template: |
+  func climbStairs(n int) int {
+      // Your code here
+      // Hint: This is Fibonacci — use dynamic programming
+      return 0
+  }
+
+test_cases:
+  - params: [2]
+    expected: 2
+    description: "n=2 — 1+1 or 2"
+  - params: [3]
+    expected: 3
+    description: "n=3 — 1+1+1, 1+2, 2+1"
+  - params: [1]
+    expected: 1
+    description: "n=1 — only one step"
+  - params: [4]
+    expected: 5
+    description: "n=4 — Fibonacci: f(4)=f(3)+f(2)=3+2=5"
+  - params: [5]
+    expected: 8
+    description: "n=5 — Fibonacci: f(5)=f(4)+f(3)=5+3=8"
+
+constraints:
+  - "1 ≤ n ≤ 45"
+
+time_complexity_hint: "O(n)"
+space_complexity_hint: "O(1)"
+
+solution:
+  code: |
+    func climbStairs(n int) int {
+        if n <= 2 {
+            return n
+        }
+        one, two := 1, 2
+        for i := 3; i <= n; i++ {
+            one, two = two, one+two
+        }
+        return two
+    }
+  approach: "Bottom-up dynamic programming (Fibonacci)"
+  time_complexity: "O(n)"
+  space_complexity: "O(1)"

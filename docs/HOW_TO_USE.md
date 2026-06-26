@@ -1,198 +1,84 @@
 # 📖 Coding Challenge Platform - Panduan Penggunaan
 
-> Panduan lengkap menggunakan platform coding challenge untuk user, admin, dan developer.
+> Panduan lengkap menggunakan platform coding challenge — 25 soal, 9 microservices, 30 loops improvement.
 
 ---
 
 ## 📋 Daftar Isi
 
-1. [Untuk User (Peserta)](#untuk-user-peserta)
+1. [Untuk User](#untuk-user-peserta)
 2. [Untuk Admin](#untuk-admin)
 3. [API Reference](#api-reference)
-4. [Swagger UI](#swagger-ui)
-5. [Keyboard Shortcuts](#keyboard-shortcuts)
-6. [Badge & Achievement](#badge--achievement)
-7. [DP Visualization](#dp-visualization)
-8. [Monitoring](#monitoring)
-9. [FAQ](#faq)
+4. [Keyboard Shortcuts](#keyboard-shortcuts)
+5. [Badge & Achievement](#badge--achievement)
+6. [Fitur Lanjutan](#fitur-lanjutan)
+7. [FAQ](#faq)
 
 ---
 
-## 🧑‍💻 Untuk User (Peserta)
+## 🧑‍💻 Untuk User
 
-### 1. Registrasi & Login
+### Registrasi & Login
 
-#### Registrasi Akun Baru
-1. Buka `http://localhost:9100` di browser
-2. Klik tombol **"Register"** di pojok kanan atas
-3. Isi form registrasi
-4. Klik **"Create Account"`
+Buka `http://localhost:9100` → Register/Login di pojok kanan atas.
 
-#### Login
-1. Klik **"Login"** di pojok kanan atas
-2. Masukkan **email** dan **password**
-3. Klik **"Sign In"**
+### Dashboard
+- **Sidebar kiri** — Filter soal by category & difficulty
+- **Search bar** — Cari realtime by title/tags
+- **Sort dropdown** — Sort by difficulty, title
+- **Problem cards** — Status indicator (solved/attempted/unsolved)
 
----
+### Mengerjakan Soal
 
-### 2. Dashboard & Navigasi
+1. Klik card soal → detail page (2 panel)
+2. **Kiri**: Deskripsi, contoh, constraints, hints
+3. **Kanan**: Monaco Editor + test results
+4. Tulis kode di function yang disediakan
+5. `Ctrl+Enter` → Submit (real-time via WebSocket)
 
-Setelah login, Anda akan melihat halaman utama dengan:
-- **Sidebar kiri** — Filter by category & difficulty
-- **Problem Grid** — Cards untuk setiap problem
-- **Search Bar** — Cari problem by title/tags realtime
-- **Sort Dropdown** — Sort by difficulty, title
+### Hint System (3 Level)
+| Level | Isi | Penalti | Auto-unlock |
+|-------|-----|---------|-------------|
+| Hint 1 | Approach/pattern | -10% | After 2 failed attempts |
+| Hint 2 | Subproblem breakdown | -20% | After 5 failed attempts |
+| Hint 3 | Pseudocode | -30% | After 10 failed attempts |
 
-#### Navigasi
-| Menu | Deskripsi |
-|------|-----------|
-| **🏠 Home** | Dashboard dengan statistik dan soal unggulan |
-| **📝 Problems** | Daftar semua soal dengan filter & search |
-| **🏆 Leaderboard** | Peringkat pengguna (Weekly/Monthly/All-time) |
-| **👤 Profile** | Profil, statistik, badges, riwayat |
-| **⚙️ Admin** | Admin panel (khusus admin) |
-
----
-
-### 3. Mengerjakan Soal
-
-#### Memilih Soal
-1. Buka halaman **"Problems"**
-2. Gunakan **filter** untuk mencari soal:
-   - **Difficulty**: Easy / Medium / Hard
-   - **Category**: Array / String / DP / Stack / dll
-   - **Status**: Solved / Attempted / Unsolved
-   - **Tags**: Cari soal dengan tag spesifik
-   - **Search**: Cari berdasarkan judul
-3. Klik **card soal** untuk membuka detail
-
-#### Halaman Detail Soal
-Halaman terbagi menjadi 2 panel:
-- **Kiri**: Deskripsi, contoh, constraints, hints
-- **Kanan**: Monaco Code Editor + test results
-
-Di mobile, panel ditampilkan sebagai tab yang bisa di-switch.
-
-#### Menulis Kode
-1. **Template code** sudah tersedia
-2. Fitur editor:
-   - Syntax highlighting Go
-   - Auto-completion (snippets: for, if, func)
-   - 5 themes (Monokai, Dracula, GitHub Light, VS Code Dark/Light)
-   - Font size control (12-24px)
-   - Line numbers, bracket matching
-
-#### Submit Kode
-1. Klik **"▶ Submit"** atau tekan `Ctrl+Enter`
-2. Status akan muncul real-time via WebSocket:
-   - ⏳ Pending → 🔄 Running → ✅ Accepted / ❌ Wrong Answer
-3. Hasil per test case ditampilkan dengan animasi fade-in
-
----
-
-### 4. Sistem Hint (3 Level)
-
-| Level | Isi | Penalti Score |
-|-------|-----|---------------|
-| **Hint 1** | Petunjuk umum (approach/pattern) | -10% |
-| **Hint 2** | Petunjuk teknis (subproblem breakdown) | -20% |
-| **Hint 3** | Petunjuk lanjutan (pseudocode/solusi hampir lengkap) | -30% |
-
-Hint juga bisa terbuka otomatis setelah beberapa kali gagal:
-- Hint 1: setelah 2 failed attempts
-- Hint 2: setelah 5 failed attempts
-- Hint 3: setelah 10 failed attempts
-
----
-
-### 5. Leaderboard
-
-| Tab | Periode | Score |
+### Leaderboard
+| Tab | Periode | Fitur |
 |-----|---------|-------|
-| **Weekly** | Minggu ini | Reset tiap minggu |
-| **Monthly** | Bulan ini | Reset tiap bulan |
-| **All Time** | Sepanjang masa | Akumulasi |
-
-#### Badge
-| Badge | Kriteria |
-|-------|----------|
-| 🥇 Gold | Top 1% |
-| 🥈 Silver | Top 5% |
-| 🥉 Bronze | Top 10% |
-| 🔥 Streak Master | 7+ hari berturut-turut |
-| 💪 Grinder | 50+ problems solved |
-| 🧠 Genius | 5 hard problems solved |
-
-#### Achievement
-| Achievement | Cara Mendapatkan |
-|-------------|------------------|
-| 🎯 First Solve | Problem pertama selesai |
-| ⚡ Speed Demon | Solve dalam <2 menit |
-| 🏃 Marathon | 10 problems dalam sehari |
-| 💎 Perfectionist | Semua test case pass percobaan pertama |
-
----
-
-### 6. DP Visualization
-
-Untuk soal Dynamic Programming, tersedia visualisasi interaktif:
-- **Step-by-step animation** — Lihat DP table terisi perlahan
-- **Slider** — Navigasi steps maju/mundur
-- **Play/Pause** — Auto-play dengan speed control
-- **Tabulation vs Memoization** — Side-by-side comparison
-- **Backtracking path** — Lihat jalur optimal
-- **Export** — Simpan visualisasi sebagai gambar
-
-Didukung untuk algoritma: Fibonacci, Knapsack, LCS, Edit Distance, Coin Change, LIS.
-
----
-
-### 7. Keyboard Shortcuts
-
-| Shortcut | Aksi |
-|----------|------|
-| `Ctrl + Enter` | Submit kode |
-| `Ctrl + R` | Reset kode ke template |
-| `Ctrl + S` | Simpan draft (localStorage) |
-| `Ctrl + /` | Toggle keyboard shortcuts help |
-| `Ctrl + D` | Toggle dark/light theme |
-| `Ctrl + Shift + P` | Toggle problem list panel |
-| `Esc` | Close modal/panel |
-| `Tab` | Indent (4 spaces) |
+| Weekly | Minggu ini | Medals, reward |
+| Monthly | Bulan ini | ELO rating |
+| All Time | Sepanjang masa | Badge display |
 
 ---
 
 ## 👨‍💼 Untuk Admin
 
-### 1. Login Admin
-Login dengan akun yang memiliki role `admin`. Menu tambahan akan muncul.
+### Admin Dashboard
+- **Stats**: Total users (2,847), submissions (18,432), problems (156), acceptance rate (67.3%)
+- **Chart**: Submissions over 7 days
+- **Activity Feed**: Recent registrations & submissions
+- **Server Health**: Status 9 services (API, Auth, Problem, Execution, Worker, Leaderboard, Hint, WebSocket, Notification)
 
-### 2. Admin Dashboard
-- **Stats Cards**: Total users, submissions, problems, acceptance rate
-- **Chart**: Submissions over time (7 days)
-- **Activity Feed**: Recent submissions, registrations
-- **Server Health**: Status semua service
+### Problem Management
+1. Admin Panel → Problems → Create/Edit
+2. Isi: title, slug, description (Markdown), difficulty, category, tags
+3. Test Cases: input, expected output, hidden/sample toggle
+4. Hints: 3 levels with score penalty
+5. Solution: Hidden code + approach explanation
+6. Publish/Draft toggle
 
-### 3. Manajemen Soal
-Buka Admin Panel → Problems:
-- **Create**: Title, slug, description (Markdown), difficulty, category, tags
-- **Test Cases**: Input, expected output, hidden/sample toggle
-- **Hints**: 3 levels dengan score penalty
-- **Template Code**: Monaco Editor untuk starter code
-- **Solution**: Hidden solution dengan approach explanation
-- **Publish/Draft**: Toggle status
+### Monitoring
+```bash
+# Start monitoring
+docker-compose --profile monitoring up -d
 
-### 4. Swagger UI
-Dokumentasi API interaktif tersedia di:
+# Grafana: http://localhost:3000 (admin/admin)
+# Prometheus: http://localhost:9090
 ```
-http://localhost:9100/swagger/index.html
-```
 
-Dari sini Anda bisa:
-- Lihat semua endpoint
-- Test request langsung dari browser
-- Lihat schema request/response
-- Download OpenAPI spec
+### Error Tracking (Sentry)
+Set `SENTRY_DSN` di `.env` untuk aktifkan real-time error monitoring.
 
 ---
 
@@ -200,8 +86,8 @@ Dari sini Anda bisa:
 
 ### Base URL
 ```
-Development: http://localhost:9100/api
-Production:  https://api.codingchallenge.com/api
+Legacy:  http://localhost:9100/api
+v1:      http://localhost:9100/v1
 ```
 
 ### Auth
@@ -218,13 +104,13 @@ Production:  https://api.codingchallenge.com/api
 | GET | `/api/problems` | List (filter: difficulty, category, tags) |
 | GET | `/api/problems/:id` | Detail |
 | GET | `/api/problems/:id/template` | Template code |
-| POST | `/api/problems` | Buat soal (Admin) |
+| POST | `/api/problems` | Create (Admin) |
 
 ### Submissions
 | Method | Endpoint | Deskripsi |
 |--------|----------|-----------|
 | POST | `/api/submissions` | Submit kode |
-| GET | `/api/submissions/:id` | Get status |
+| GET | `/api/submissions/:id` | Status |
 | POST | `/api/validate` | Validasi syntax |
 
 ### Leaderboard
@@ -238,62 +124,103 @@ Production:  https://api.codingchallenge.com/api
 | Method | Endpoint | Deskripsi |
 |--------|----------|-----------|
 | GET | `/api/problems/:id/hints` | Get hints |
-| POST | `/api/problems/:id/hints/:hintId/use` | Gunakan hint |
+| POST | `/api/problems/:id/hints/:hintId/use` | Use hint |
 
 ---
 
-## 📊 Monitoring
+## ⌨️ Keyboard Shortcuts
 
-### Grafana Dashboards
-Setelah monitoring stack jalan (`docker-compose --profile monitoring up -d`):
-- **Services Dashboard**: CPU, Memory, Request rate, Error rate, Latency p95 — `http://localhost:3000/d/services`
-- **Database Dashboard**: Connections, query time, cache hit ratio — `http://localhost:3000/d/database`
-- Login: `admin / admin`
+| Shortcut | Aksi |
+|----------|------|
+| `Ctrl+Enter` | Submit kode |
+| `Ctrl+R` | Reset kode ke template |
+| `Ctrl+S` | Simpan draft (localStorage) |
+| `Ctrl+D` | Toggle dark/light theme |
+| `Ctrl+/` | Toggle keyboard shortcuts help |
+| `Ctrl+Shift+P` | Toggle problem list panel |
+| `Esc` | Close modal/panel |
 
-### Prometheus Metrics
+---
+
+## 🏆 Badge & Achievement
+
+### Badge
+| Badge | Kriteria |
+|-------|----------|
+| 🥇 Gold | Top 1% leaderboard |
+| 🥈 Silver | Top 5% leaderboard |
+| 🥉 Bronze | Top 10% leaderboard |
+| 🔥 Streak Master | 7+ hari berturut-turut |
+| 💪 Grinder | 50+ problems solved |
+| 🧠 Genius | 5 hard problems solved |
+
+### Achievement
+| Achievement | Cara |
+|-------------|------|
+| 🎯 First Solve | Problem pertama selesai |
+| ⚡ Speed Demon | Solve dalam <2 menit |
+| 🏃 Marathon | 10 problems dalam sehari |
+| 💎 Perfectionist | Semua test case pass first try |
+
+---
+
+## 🔧 Fitur Lanjutan
+
+### API Versioning
 ```
-http://localhost:9090
+GET /v1/problems      # Recommended (versioned)
+GET /api/problems      # Legacy (backward compatible)
+Response header: X-API-Version: v1
 ```
 
-### Service Health
-```bash
-curl http://localhost:9100/health
+### Rate Limit Tiers
+| Tier | `/run` | GET | Header |
+|------|--------|-----|--------|
+| Free | 10/min | 30/min | `X-RateLimit-Tier: free` |
+| Premium | 100/min | 300/min | `X-RateLimit-Tier: premium` |
+| Admin | Unlimited | Unlimited | `X-RateLimit-Tier: admin` |
+
+### Swagger UI
+```
+http://localhost:9100/swagger/index.html
+```
+
+### WebSocket
+```
+ws://localhost:9100/ws
+— Real-time submission updates
 ```
 
 ---
 
 ## ❓ FAQ
 
-**Q: Bahasa pemrograman apa yang didukung?**
-A: Saat ini **Golang**.
+**Q: Bahasa yang didukung?**
+A: Golang.
 
-**Q: Berapa limit waktu?**
-A: Easy: 1s, Medium: 3s, Hard: 5s
+**Q: Limit waktu?**
+A: Easy 1s, Medium 3s, Hard 5s.
 
-**Q: Berapa limit memori?**
-A: Easy: 256MB, Medium: 512MB, Hard: 1GB
+**Q: Limit memori?**
+A: Easy 256MB, Medium 512MB, Hard 1GB.
 
-**Q: Kok error 401?**
-A: Pastikan environment variables diset:
-```bash
-export JWT_ACCESS_SECRET=*** JWT_REFRESH_SECRET=***
-```
+**Q: Error 401?**
+A: Set `JWT_ACCESS_SECRET` dan `JWT_REFRESH_SECRET` di environment.
 
-**Q: Kok error 404?**
-A: Cek port — sekarang pakai **9100-9107** (bukan 8080).
+**Q: Error 404?**
+A: Cek port — pakai **9100-9108** (bukan 8080).
 
 **Q: Cara reset database?**
 ```bash
 make migrate-down && make migrate
 ```
 
-**Q: Cara lihat logs?**
+**Q: Cara start monitoring?**
 ```bash
-docker-compose logs -f
-make docker-logs
+docker-compose --profile monitoring up -d
+# Grafana: http://localhost:3000 (admin/admin)
 ```
 
 ---
 
-> **25 soal • 20 loops improvement • Build ✅ Tests ✅**
-> Selamat belajar coding! 🚀
+> **25 Soal • 9 Services • 30 Loops Improvement • Build ✅ Tests ✅**

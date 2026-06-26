@@ -11,6 +11,7 @@
 ![Kubernetes](https://img.shields.io/badge/Kubernetes-1.28+-326CE5?style=flat&logo=kubernetes)
 ![Tests](https://img.shields.io/badge/Tests-10_packages_passing-brightgreen)
 ![Problems](https://img.shields.io/badge/Problems-25-blue)
+![Loops](https://img.shields.io/badge/Loops-30-orange)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 
 ---
@@ -23,51 +24,44 @@
 - [Dokumentasi](#dokumentasi)
 - [Arsitektur](#arsitektur)
 - [API Reference](#api-reference)
-- [Development](#development)
-- [Deployment](#deployment)
-- [Monitoring](#monitoring)
-- [20 Loop Improvement](#20-loop-improvement)
+- [30 Loop Improvement](#30-loop-improvement)
 - [Kontribusi](#kontribusi)
-- [Lisensi](#lisensi)
 
 ---
 
 ## ✨ Fitur Utama
 
-### Untuk User (Peserta)
-- ✅ **25 Soal** — Algoritma, Data Structure, Dynamic Programming
-- ✅ **3 Tingkat Kesulitan** — Easy, Medium, Hard
+### Untuk User
+- ✅ **25 Soal** — Algoritma, Data Structure, Dynamic Programming (3 tingkat kesulitan)
 - ✅ **Tag Filter** — Filter soal berdasarkan tags (`?tags=hash-map,dp`)
-- ✅ **Real-time Code Execution** — Compiler Go dengan feedback instan
-- ✅ **Progressive Hint System** — 3 level hints per soal
-- ✅ **Leaderboard** — Weekly, Monthly, All-time ranking dengan ELO
-- ✅ **Badge & Achievement System** — 6 badges, 4 achievements
-- ✅ **Code Editor** — Monaco Editor dengan 5 themes + auto-completion
-- ✅ **DP Visualization** — Step-by-step animasi algoritma DP
-- ✅ **Submission History** — Track semua submission
-- ✅ **Profil & Statistik** — Rating, streak, solved problems
+- ✅ **Real-time Code Execution** — Docker sandbox dengan Go compiler
+- ✅ **Progressive Hint System** — 3 level hints, auto-unlock after failed attempts
+- ✅ **Badge & Achievement** — 6 badges (Gold/Silver/Bronze/Streak/Grinder/Genius)
+- ✅ **Leaderboard** — Weekly, Monthly, All-time ranking dengan ELO rating
+- ✅ **Code Editor** — Monaco Editor dengan 5 themes + Go snippets + auto-completion
+- ✅ **DP Visualization** — Step-by-step animasi (Fibonacci, Knapsack, LCS, Edit Distance, Coin Change, LIS)
+- ✅ **Real-time Updates** — Submission status via WebSocket
+- ✅ **Keyboard Shortcuts** — Ctrl+Enter submit, Ctrl+R reset, Ctrl+Shift+P toggle panel
 
 ### Untuk Admin
-- ✅ **Problem Management** — CRUD soal dengan test cases
-- ✅ **User Management** — Ban/unban, role management
-- ✅ **Admin Dashboard** — Statistik real-time, charts, activity feed
-- ✅ **Log Viewer** — View dan filter logs
-- ✅ **Swagger/OpenAPI** — Dokumentasi API otomatis
+- ✅ **Problem Management** — CRUD dengan test cases, hints, template, solution
+- ✅ **User Management** — Ban/unban, role management (user/premium/admin)
+- ✅ **Admin Dashboard** — Statistik, charts, server health, activity feed
+- ✅ **Swagger UI** — Dokumentasi API interaktif di `/swagger/index.html`
+- ✅ **Email Notifications** — SMTP-based notification service
+- ✅ **Sentry Error Tracking** — Real-time error monitoring
 
 ### Teknis
-- ✅ **Microservices Architecture** — 8 services (API Gateway, Auth, Problem, Execution, Worker, Leaderboard, Hint, WebSocket)
-- ✅ **Docker Sandbox** — Secure code execution with seccomp + AppArmor
-- ✅ **WebSocket** — Real-time submission updates
+- ✅ **Microservices** — 9 services (API Gateway, Auth, Problem, Execution, Worker, Leaderboard, Hint, WebSocket, Notification)
+- ✅ **API Versioning** — `/v1/` prefix + backward compatibility
+- ✅ **Docker Sandbox** — seccomp + AppArmor + network isolation
+- ✅ **Rate Limiting** — 3 tiers (Free/Premium/Admin) with sliding window
 - ✅ **Redis Caching** — Cache warming, cursor pagination, TTL 5 menit
-- ✅ **RabbitMQ** — Async code execution queue + priority queue + DLQ
-- ✅ **JWT Authentication** — Secure auth dengan refresh tokens + device fingerprint
-- ✅ **Rate Limiting** — Sliding window, X-RateLimit headers
-- ✅ **Graceful Shutdown** — Zero-downtime deployment
-- ✅ **CORS Security** — Specific origin dari env var (bukan wildcard)
-- ✅ **Prometheus + Grafana** — Monitoring metrics dan dashboards
-- ✅ **Gzip Compression** — Kompresi JSON responses
-- ✅ **Cursor-based Pagination** — Keyset pagination (bukan OFFSET)
-- ✅ **OpenAPI/Swagger** — Dokumentasi API interaktif di `/swagger/index.html`
+- ✅ **RabbitMQ** — Priority queue + DLQ + work stealing
+- ✅ **Prometheus + Grafana** — Monitoring dashboards auto-provisioned
+- ✅ **CORS Security** — Specific origin dari env var + CSRF protection
+- ✅ **E2E Tests** — Playwright test suite
+- ✅ **Terraform IaC** — AWS: VPC, EKS, RDS, ElastiCache, MQ
 
 ---
 
@@ -81,76 +75,39 @@
 | **Database** | PostgreSQL 15+ |
 | **Cache** | Redis 7+ |
 | **Message Queue** | RabbitMQ 3.12 |
-| **Authentication** | JWT (access + refresh tokens) |
+| **Auth** | JWT (access + refresh tokens) |
 | **Container** | Docker 24+ (multi-stage builds) |
 | **Orchestration** | Kubernetes 1.28+ |
-| **Monitoring** | Prometheus + Grafana (auto-provisioned) |
+| **Monitoring** | Prometheus + Grafana |
+| **Error Tracking** | Sentry |
+| **E2E Tests** | Playwright |
 | **CI/CD** | GitHub Actions |
-| **IaC** | Terraform (AWS: VPC, EKS, RDS, ElastiCache, MQ) |
+| **IaC** | Terraform (AWS) |
 | **API Docs** | Swagger/OpenAPI 2.0 |
 
 ---
 
 ## 🚀 Quick Start
 
-### Prasyarat
-- Go 1.25+
-- Docker & Docker Compose
-- Node.js 18+
-
-### Opsi 1: Docker Compose (Rekomendasi)
-
 ```bash
-# Clone repository
-git clone https://github.com/codingchallenge/platform.git
-cd platform
+# Prasyarat
+export JWT_ACCESS_SECRET=*** JWT_REFRESH_SECRET=***
 
-# Setup environment
-cp .env.example .env
-# Edit .env — set JWT_ACCESS_SECRET dan JWT_REFRESH_SECRET
-
-# Start semua services
+# Docker Compose
 docker-compose up -d --build
+# Buka http://localhost:9100
 
-# Buka di browser
-open http://localhost:9100
-```
-
-### Opsi 2: Manual Development
-
-```bash
-# 1. Install dependencies
-go mod download
-
-# 2. Setup infrastructure
-docker-compose up -d postgres redis rabbitmq
-
-# 3. Run migrations
-make migrate
-
-# 4. Export JWT secrets
-export JWT_ACCESS_SECRET=***
-export JWT_REFRESH_SECRET=***
-
-# 5. Start services (di terminal terpisah)
-go run services/auth-service/main.go      # :9101
+# Atau manual
+go run services/api-gateway/main.go        # :9100
+go run services/auth-service/main.go       # :9101
 go run services/problem-service/main.go    # :9102
 go run services/execution-service/main.go  # :9103
 go run services/leaderboard-service/main.go # :9104
 go run services/hint-service/main.go       # :9105
 go run services/execution-worker/main.go   # :9106
 go run services/websocket-service/main.go  # :9107
-go run services/api-gateway/main.go        # :9100
-
-# 6. Start frontend (di terminal lain)
-cd web/frontend
-npm install
-npm run dev
-
-# 7. Buka http://localhost:5173
+go run services/notification-service/main.go # :9108
 ```
-
-Selengkapnya lihat [docs/HOW_TO_RUN.md](docs/HOW_TO_RUN.md)
 
 ---
 
@@ -158,19 +115,17 @@ Selengkapnya lihat [docs/HOW_TO_RUN.md](docs/HOW_TO_RUN.md)
 
 | Dokumen | Deskripsi |
 |---------|-----------|
-| [docs/HOW_TO_RUN.md](docs/HOW_TO_RUN.md) | Panduan lengkap menjalankan aplikasi |
-| [docs/HOW_TO_USE.md](docs/HOW_TO_USE.md) | Panduan menggunakan aplikasi (user & admin) |
-| [docs/ARCHITECTURE_V2.md](docs/ARCHITECTURE_V2.md) | Diagram arsitektur dan penjelasan |
-| [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) | Schema database dan query examples |
-| [docs/API.md](docs/API.md) | API documentation |
-| [docs/SUMMARY.md](docs/SUMMARY.md) | Ringkasan lengkap proyek |
+| [docs/HOW_TO_RUN.md](docs/HOW_TO_RUN.md) | Panduan menjalankan aplikasi |
+| [docs/HOW_TO_USE.md](docs/HOW_TO_USE.md) | Panduan penggunaan (user & admin) |
+| [docs/ARCHITECTURE_V2.md](docs/ARCHITECTURE_V2.md) | Diagram arsitektur sistem |
+| [docs/API.md](docs/API.md) | API documentation + versioning |
 | [docs/FINAL_REPORT.md](docs/FINAL_REPORT.md) | Laporan final build & test |
-| [docs/PERFORMANCE_REPORT.md](docs/PERFORMANCE_REPORT.md) | Benchmark dan load test |
+| [docs/PERFORMANCE_REPORT.md](docs/PERFORMANCE_REPORT.md) | Benchmark & load test |
 | [docs/MONITORING_SETUP.md](docs/MONITORING_SETUP.md) | Setup Prometheus + Grafana |
-| [docs/CODE_REVIEW_FINDINGS.md](docs/CODE_REVIEW_FINDINGS.md) | Code review findings |
+| [docs/SECURITY_AUDIT.md](docs/SECURITY_AUDIT.md) | Security audit findings |
+| [docs/QUERY_OPTIMIZATION.md](docs/QUERY_OPTIMIZATION.md) | Database optimization |
 | [docs/SECURITY.md](docs/SECURITY.md) | Security policy |
 | [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) | Panduan kontribusi |
-| [docs/CHANGELOG.md](docs/CHANGELOG.md) | Riwayat perubahan |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Rencana pengembangan |
 
 ---
@@ -179,7 +134,7 @@ Selengkapnya lihat [docs/HOW_TO_RUN.md](docs/HOW_TO_RUN.md)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        Browser (Client)                          │
+│                       Browser (Client)                           │
 │  ┌──────────────┐  ┌──────────────┐  ┌───────────────────────┐ │
 │  │ Problem List │  │ Code Editor  │  │ Test Results + Hints │ │
 │  │   (React)    │  │  (Monaco)    │  │   (Real-time WS)     │ │
@@ -188,7 +143,7 @@ Selengkapnya lihat [docs/HOW_TO_RUN.md](docs/HOW_TO_RUN.md)
                            │ HTTP / WebSocket
 ┌──────────────────────────▼──────────────────────────────────────┐
 │                    API Gateway (Go/Gin)                          │
-│  • Rate Limiting • JWT Validation • Gzip • Timeout • CORS      │
+│  Rate Limiting • JWT • Gzip • Timeout • CORS • CSRF • Sentry   │
 └──────┬────────┬────────┬────────┬────────┬────────┬─────────────┘
        │        │        │        │        │        │
 ┌──────▼──┐ ┌───▼────┐ ┌─▼──────┐ ┌─▼────┐ ┌─▼────┐ ┌─────────▼──┐
@@ -201,18 +156,16 @@ Selengkapnya lihat [docs/HOW_TO_RUN.md](docs/HOW_TO_RUN.md)
      └────┬────┴────┴────┴────┬─────┘
           │                   │
 ┌─────────▼───────────────────▼────────────────────────────────────┐
-│                    Data Layer                                     │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
-│  │  PostgreSQL  │  │    Redis     │  │   RabbitMQ   │          │
-│  │  (Primary)   │  │   (Cache)    │  │  (Job Queue) │          │
-│  └──────────────┘  └──────────────┘  └──────────────┘          │
+│                    Data Layer + Services                          │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │
+│  │  PostgreSQL  │  │    Redis     │  │      RabbitMQ        │  │
+│  │  (Primary)   │  │   (Cache)    │  │  (Job + Notif Queue) │  │
+│  └──────────────┘  └──────────────┘  └──────────────────────┘  │
+│  ┌──────────────────┐  ┌────────────────────────────────────┐  │
+│  │ Execution Worker │  │     Notification Service (:9108)   │  │
+│  │  (Docker Sandbox)│  │  (SMTP + RabbitMQ consumer)        │  │
+│  └──────────────────┘  └────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────────────────┘
-                           │
-┌──────────────────────────▼──────────────────────────────────────┐
-│               Code Execution (Docker Sandbox)                    │
-│  • --network=none • --read-only • seccomp • AppArmor           │
-│  • Memory: 256MB-1GB • CPU: 1 • Timeout: 1-5s                 │
-└─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -222,133 +175,69 @@ Selengkapnya lihat [docs/HOW_TO_RUN.md](docs/HOW_TO_RUN.md)
 ### Base URL
 ```
 Development: http://localhost:9100/api
-Production:  https://api.codingchallenge.com/api
+Versioned:   http://localhost:9100/v1
 ```
 
 ### Endpoints
 
-#### Auth
-| Method | Endpoint | Deskripsi | Auth |
-|--------|----------|-----------|------|
-| POST | `/auth/register` | Registrasi | ❌ |
-| POST | `/auth/login` | Login | ❌ |
-| POST | `/auth/refresh` | Refresh token | ❌ |
-| POST | `/auth/logout` | Logout | ✅ |
+| Method | Endpoint | Deskripsi | Auth | Tier |
+|--------|----------|-----------|------|------|
+| GET | `/health` | Health check | ❌ | - |
+| POST | `/auth/register` | Registrasi | ❌ | Free |
+| POST | `/auth/login` | Login | ❌ | Free |
+| POST | `/auth/refresh` | Refresh token | ❌ | Free |
+| GET | `/api/problems` | List soal (filter: difficulty, category, tags, page) | ❌ | Free |
+| GET | `/api/problems/:id` | Detail soal | ❌ | Free |
+| GET | `/api/problems/:id/template` | Template code | ❌ | Free |
+| POST | `/api/submissions` | Submit kode | ✅ | Free/Premium |
+| GET | `/api/submissions/:id` | Submission status | ✅ | Free |
+| GET | `/api/leaderboard/*` | Leaderboard | ❌ | Free |
+| GET | `/api/problems/:id/hints` | Get hints | ✅ | Free |
+| POST | `/api/validate` | Validasi syntax | ✅ | Free |
+| GET | `/swagger/index.html` | Swagger UI | ❌ | - |
+| WS | `/ws` | WebSocket updates | ✅ | Free |
 
-#### Problems
-| Method | Endpoint | Deskripsi | Auth |
-|--------|----------|-----------|------|
-| GET | `/api/problems` | List soal (filter: difficulty, category, tags) | ❌ |
-| GET | `/api/problems/:id` | Detail soal | ❌ |
-| GET | `/api/problems/:id/template` | Get template code | ❌ |
-| POST | `/api/problems` | Buat soal (Admin) | ✅ Admin |
+### Rate Limit Tiers
+| Tier | `/run` | GET endpoints | Admin |
+|------|--------|---------------|-------|
+| **Free** | 10 req/min | 30 req/min | - |
+| **Premium** | 100 req/min | 300 req/min | - |
+| **Admin** | Unlimited | Unlimited | ✅ |
 
-#### Submissions
-| Method | Endpoint | Deskripsi | Auth |
-|--------|----------|-----------|------|
-| POST | `/api/submissions` | Submit kode | ✅ |
-| GET | `/api/submissions/:id` | Get submission status | ✅ |
-| GET | `/api/submissions/user/:userId` | Riwayat submission | ✅ |
-| POST | `/api/validate` | Validasi syntax | ✅ |
-
-#### Leaderboard
-| Method | Endpoint | Deskripsi | Auth |
-|--------|----------|-----------|------|
-| GET | `/api/leaderboard/weekly` | Peringkat mingguan | ❌ |
-| GET | `/api/leaderboard/monthly` | Peringkat bulanan | ❌ |
-| GET | `/api/leaderboard/all-time` | Peringkat keseluruhan | ❌ |
-
-#### Hints
-| Method | Endpoint | Deskripsi | Auth |
-|--------|----------|-----------|------|
-| GET | `/api/problems/:id/hints` | Get hints | ✅ |
-| POST | `/api/problems/:id/hints/:hintId/use` | Gunakan hint | ✅ |
-
-#### WebSocket
-| Endpoint | Deskripsi |
-|----------|-----------|
-| `ws://localhost:9100/ws` | Real-time submission updates |
-
-#### Swagger
-| Endpoint | Deskripsi |
-|----------|-----------|
-| `GET /swagger/index.html` | Dokumentasi API interaktif |
+### API Versioning
+- Legacy: `/api/...` — backward compatible
+- Versioned: `/v1/...` — recommended
+- Header: `X-API-Version: v1`
 
 ---
 
-## 🗂 Struktur Project
+## 🗂 Service Ports
 
-```
-coding-challange/
-├── 📂 docs/                           # Dokumentasi (15+ files)
-├── 📂 services/                       # 8 Microservices
-│   ├── api-gateway/                   # API Gateway (Go + Gin)
-│   ├── auth-service/                  # Authentication service
-│   ├── problem-service/               # Problem management
-│   ├── execution-service/             # Code execution orchestrator
-│   ├── execution-worker/              # Code execution worker
-│   ├── websocket-service/             # WebSocket real-time
-│   ├── leaderboard-service/           # Ranking & scoring ELO
-│   └── hint-service/                  # Hint management
-├── 📂 pkg/                            # Shared packages (10 pkg)
-├── 📂 internal/                       # Internal packages (7 pkg)
-├── 📂 web/frontend/                   # React SPA (40+ components)
-├── 📂 problems/                       # 25 Problem bank (YAML)
-├── 📂 deployments/                    # K8s, Terraform, Prometheus
-├── 📂 tests/                          # Integration + load tests
-├── 📂 benchmarks/                     # Performance benchmarks
-├── 📂 proto/                          # gRPC proto files
-├── 📂 .github/workflows/              # CI/CD pipelines
-├── 📄 docker-compose.yml              # Docker Compose
-└── 📄 Makefile                        # Build commands
-```
+| Service | Port | Health |
+|---------|------|--------|
+| API Gateway | **9100** | ✅ |
+| Auth Service | **9101** | ✅ |
+| Problem Service | **9102** | ✅ |
+| Execution Service | **9103** | ✅ |
+| Leaderboard Service | **9104** | ✅ |
+| Hint Service | **9105** | ✅ |
+| Execution Worker | **9106** | ✅ |
+| WebSocket Service | **9107** | ✅ |
+| Notification Service | **9108** | ✅ |
 
 ---
 
-## 🧪 Testing
+## 📊 30 Loop Improvement
 
-```bash
-# Run all tests
-make test
-
-# Run with coverage
-make test-coverage
-
-# Run benchmarks
-go test -bench=. ./benchmarks/ -benchmem
-
-# Run load tests (needs K6)
-k6 run tests/load/k6-script.js
-
-# Run specific package
-go test ./internal/handler/... -v
-```
-
-### Test Status (10 packages)
-- ✅ `internal/handler` — HTTP handlers
-- ✅ `internal/repository` — Data access
-- ✅ `internal/service` — Business logic
-- ✅ `pkg/logger` — Logging
-- ✅ `pkg/middleware` — Auth, CORS, rate limit
-- ✅ `pkg/rabbitmq` — Message queue
-- ✅ `pkg/redis` — Caching
-- ✅ `pkg/security` — Security utilities
-- ✅ `services/execution-worker` — Code execution
-- ✅ `tests/integration` — Integration tests
-
----
-
-## 📊 20 Loop Improvement
-
-| Loop | Fokus | Hasil |
-|------|-------|-------|
+| # | Fokus | Hasil |
+|---|-------|-------|
 | 1 | Foundation | Architecture docs, fix tests, 0 TS errors |
 | 2-3 | Core Fixes | Hapus monolith, security, konsolidasi |
 | 4 | Problems + UI | 25 problems, tag filter, search, sort |
-| 5-6 | Perf + Security | Cursor pagination, Redis cache, Gzip, rate limit headers |
+| 5-6 | Perf + Security | Cursor pagination, Redis cache, Gzip |
 | 7-8 | QA + Docs | Testing, SUMMARY.md, .env.example |
 | 9-10 | UI + Final | Skeleton loading, mobile tabs, final report |
-| 11 | Code Review | 7 remaining findings fixed, CORS hardened |
+| 11 | Code Review | 7 findings fixed, CORS hardened |
 | 12 | Test Coverage | +3 test packages (security, rabbitmq, worker) |
 | 13 | More Problems | 20 → 25 problems |
 | 14 | Frontend Tests | Vitest setup, component tests |
@@ -356,65 +245,29 @@ go test ./internal/handler/... -v
 | 16 | Load Test | K6 scripts, benchmark, performance report |
 | 17 | Docker | Multi-stage builds, .dockerignore |
 | 18 | Monitoring | Grafana dashboards, Prometheus, setup guide |
-| 19 | Hardening | Nil pointer checks, recover middleware, edge cases |
+| 19 | Hardening | Nil pointer checks, recover middleware |
 | 20 | Final | All checks PASS, production ready |
+| 21 | Problems | +5 problems (climbing-stairs, best-time-to-buy, etc) |
+| 22 | E2E Tests | Playwright (home, problem, auth specs) |
+| 23 | API Versioning | /v1/ prefix + backward compat |
+| 24 | Rate Limiting | Free/Premium/Admin tiers |
+| 25 | Notifications | Email service via RabbitMQ + SMTP |
+| 26 | Database | Index optimization + QUERY_OPTIMIZATION.md |
+| 27 | Error Tracking | Sentry integration (Gin middleware) |
+| 28 | Lighthouse | Lazy loading, preload, SEO, OG tags |
+| 29 | Security Audit | CSRF, SQL injection, sensitive data check |
+| 30 | Final | Build ✅ Tests ✅ Vet ✅ Production ready |
 
 ---
 
-## 🚢 Deployment
-
-### Docker Compose (Development)
-```bash
-make docker-up    # Start all services
-make docker-down  # Stop all services
-make docker-logs  # View logs
-```
-
-### Kubernetes (Production)
-```bash
-kubectl apply -f deployments/kubernetes/
-kubectl get pods -n coding-challenge
-```
-
-### Monitoring
-```bash
-# Start with monitoring stack
-docker-compose --profile monitoring up -d
-
-# Access Grafana: http://localhost:3000 (admin/admin)
-# Access Prometheus: http://localhost:9090
-```
-
-Lihat [docs/HOW_TO_RUN.md](docs/HOW_TO_RUN.md) untuk detail lengkap.
-
----
-
-## 🤝 Kontribusi
-
-Kami menerima kontribusi dari siapapun! Lihat [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) untuk panduan.
+## Kontribusi
 
 1. Fork repository
-2. Buat branch baru (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'feat: add amazing feature'`)
-4. Push ke branch (`git push origin feature/amazing-feature`)
-5. Buat Pull Request
+2. Buat branch (`git checkout -b feature/xxx`)
+3. Commit (`git commit -m 'feat: ...'`)
+4. Push & Pull Request
 
 ---
 
-## 📝 License
-
-Distributed under the MIT License. See [LICENSE](LICENSE) for more.
-
----
-
-## 📞 Kontak
-
-- **Email**: support@codingchallenge.com
-- **Discord**: https://discord.gg/codingchallenge
-- **GitHub**: https://github.com/codingchallenge/platform
-- **Swagger Docs**: http://localhost:9100/swagger/index.html
-
----
-
-> **Dibuat dengan ❤️ menggunakan Go, React, PostgreSQL, Redis, RabbitMQ, Docker, dan Kubernetes.**
-> **20 Loops Improvement — Build ✅ Tests ✅ 25 Problems ✅**
+> **30 Loops • Build ✅ Tests ✅ 10 Packages ✅ 25 Problems ✅**
+> **Dibuat dengan ❤️ menggunakan Go, React, PostgreSQL, Redis, RabbitMQ, Docker, Kubernetes**

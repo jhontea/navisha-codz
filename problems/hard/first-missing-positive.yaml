@@ -1,0 +1,99 @@
+id: "first-missing-positive"
+title: "First Missing Positive"
+type: "function"
+difficulty: "hard"
+category: "array"
+tags: ["array", "hash-map", "in-place"]
+
+description: |
+  Given an unsorted integer array `nums`, return the smallest positive
+  integer that is **not** present in `nums`.
+
+  You must implement an algorithm that runs in O(n) time and uses O(1)
+  auxiliary space.
+
+function_name: "firstMissingPositive"
+parameters:
+  - name: "nums"
+    type: "[]int"
+    description: "Array of integers"
+return_type: "int"
+
+examples:
+  - input: "nums = [1,2,0]"
+    output: "3"
+    explanation: "1 and 2 are present, so the smallest missing positive is 3."
+  - input: "nums = [3,4,-1,1]"
+    output: "2"
+    explanation: "1 is present, but 2 is not."
+  - input: "nums = [7,8,9,11,12]"
+    output: "1"
+    explanation: "1 is the smallest positive integer and is not present."
+
+hints:
+  - level: 1
+    title: "What matters are numbers 1 to n"
+    content: "For an array of size n, the answer must be in the range [1, n+1]. Numbers outside 1..n can be ignored — they don't affect the answer."
+  - level: 2
+    title: "Use the array as a hash set"
+    content: "Place each number x (where 1 ≤ x ≤ n) at index x-1 by swapping. After rearrangement, the first index i where the value is not i+1 gives the answer."
+  - level: 3
+    title: "Cyclic sort approach"
+    content: |
+      1. Iterate through the array. For each nums[i], if it's in [1, n]
+         and not already at its correct position (nums[i] != nums[nums[i]-1]),
+         swap it into place.
+      2. After rearrangement, scan for the first i where nums[i] != i+1.
+         Return i+1.
+      3. If all positions match, return n+1.
+
+template: |
+  func firstMissingPositive(nums []int) int {
+      // Your code here
+      // Hint: Place each number in its correct position by swapping
+      return 0
+  }
+
+test_cases:
+  - params: [[1, 2, 0]]
+    expected: 3
+    description: "1 and 2 present, missing 3"
+  - params: [[3, 4, -1, 1]]
+    expected: 2
+    description: "1 present, missing 2"
+  - params: [[7, 8, 9, 11, 12]]
+    expected: 1
+    description: "All numbers > 1, missing 1"
+  - params: [[1, 2, 3]]
+    expected: 4
+    description: "Consecutive from 1, answer is n+1"
+  - params: [[-1, -2, -3]]
+    expected: 1
+    description: "All negative, missing 1"
+
+constraints:
+  - "1 ≤ len(nums) ≤ 10⁵"
+  - "-2³¹ ≤ nums[i] ≤ 2³¹ - 1"
+
+time_complexity_hint: "O(n)"
+space_complexity_hint: "O(1)"
+
+solution:
+  code: |
+    func firstMissingPositive(nums []int) int {
+        n := len(nums)
+        for i := 0; i < n; i++ {
+            for nums[i] > 0 && nums[i] <= n && nums[nums[i]-1] != nums[i] {
+                nums[i], nums[nums[i]-1] = nums[nums[i]-1], nums[i]
+            }
+        }
+        for i := 0; i < n; i++ {
+            if nums[i] != i+1 {
+                return i + 1
+            }
+        }
+        return n + 1
+    }
+  approach: "Cyclic sort — place each number at its correct index"
+  time_complexity: "O(n)"
+  space_complexity: "O(1)"

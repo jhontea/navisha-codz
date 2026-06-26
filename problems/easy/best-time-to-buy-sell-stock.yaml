@@ -1,0 +1,96 @@
+id: "best-time-to-buy-sell-stock"
+title: "Best Time to Buy and Sell Stock"
+type: "function"
+difficulty: "easy"
+category: "array"
+tags: ["array", "dynamic-programming"]
+
+description: |
+  You are given an array `prices` where `prices[i]` is the price of a given
+  stock on the i-th day.
+
+  You want to maximize your profit by choosing a single day to buy one stock
+  and choosing a different day in the future to sell that stock.
+
+  Return the maximum profit you can achieve from this transaction. If you
+  cannot achieve any profit, return 0.
+
+function_name: "maxProfit"
+parameters:
+  - name: "prices"
+    type: "[]int"
+    description: "Array of stock prices where prices[i] is the price on day i"
+return_type: "int"
+
+examples:
+  - input: "prices = [7,1,5,3,6,4]"
+    output: "5"
+    explanation: "Buy at price 1 on day 2, sell at price 6 on day 5. Profit = 6 - 1 = 5."
+  - input: "prices = [7,6,4,3,1]"
+    output: "0"
+    explanation: "Prices decrease each day, no profit can be made."
+
+hints:
+  - level: 1
+    title: "Track the minimum"
+    content: "As you iterate, keep track of the lowest price seen so far. At each day, what would the profit be if you sold today?"
+  - level: 2
+    title: "One-pass solution"
+    content: "Maintain two variables: minPrice (lowest seen so far) and maxProfit (best profit so far). Update both as you iterate."
+  - level: 3
+    title: "Sliding minimum"
+    content: |
+      For each price:
+      1. Update minPrice = min(minPrice, price)
+      2. Profit if sold today = price - minPrice
+      3. Update maxProfit = max(maxProfit, profit)
+      Return maxProfit.
+
+template: |
+  func maxProfit(prices []int) int {
+      // Your code here
+      // Hint: Track the minimum price seen so far
+      return 0
+  }
+
+test_cases:
+  - params: [[7, 1, 5, 3, 6, 4]]
+    expected: 5
+    description: "Buy at 1, sell at 6"
+  - params: [[7, 6, 4, 3, 1]]
+    expected: 0
+    description: "Strictly decreasing — no profit"
+  - params: [[1, 2]]
+    expected: 1
+    description: "Buy at 1, sell at 2"
+  - params: [[3, 3, 3, 3]]
+    expected: 0
+    description: "All equal prices"
+  - params: [[2, 1, 2, 1, 0, 1, 2]]
+    expected: 2
+    description: "Buy at 0, sell at 2"
+
+constraints:
+  - "1 ≤ len(prices) ≤ 10⁵"
+  - "0 ≤ prices[i] ≤ 10⁴"
+
+time_complexity_hint: "O(n)"
+space_complexity_hint: "O(1)"
+
+solution:
+  code: |
+    func maxProfit(prices []int) int {
+        minPrice := prices[0]
+        maxProfit := 0
+        for _, price := range prices {
+            if price < minPrice {
+                minPrice = price
+            } else if profit := price - minPrice; profit > maxProfit {
+                maxProfit = profit
+            }
+        }
+        return maxProfit
+    }
+  approach: "One-pass with minimum tracking"
+  time_complexity: "O(n)"
+  space_complexity: "O(1)"

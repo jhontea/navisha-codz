@@ -11,7 +11,7 @@ BINARY_NAME=coding-challange
 GOPATH=$(shell go env GOPATH)
 
 # Service binaries
-SERVICES=auth-service problem-service execution-service leaderboard-service hint-service api-gateway
+SERVICES=auth-service problem-service execution-service leaderboard-service hint-service notification-service api-gateway
 
 # Build all services
 build:

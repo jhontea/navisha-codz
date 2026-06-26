@@ -1,0 +1,95 @@
+id: "generate-parentheses"
+title: "Generate Parentheses"
+type: "function"
+difficulty: "medium"
+category: "string"
+tags: ["string", "backtracking", "dynamic-programming"]
+
+description: |
+  Given `n` pairs of parentheses, write a function to generate all
+  combinations of well-formed parentheses.
+
+function_name: "generateParenthesis"
+parameters:
+  - name: "n"
+    type: "int"
+    description: "Number of pairs of parentheses"
+return_type: "[]string"
+
+examples:
+  - input: "n = 3"
+    output: '["((()))","(()())","(())()","()(())","()()()"]'
+    explanation: "All five valid combinations for 3 pairs."
+  - input: "n = 1"
+    output: '["()"]'
+    explanation: "Only one valid combination for 1 pair."
+
+hints:
+  - level: 1
+    title: "Backtracking approach"
+    content: "Build the string character by character. Track how many open and close brackets you've used. You can add '(' if open < n, and ')' if close < open."
+  - level: 2
+    title: "Valid prefix rule"
+    content: "At any point, you must not have more closing brackets than opening ones. A string is valid if at every prefix, open ≥ close, and at the end open == close == n."
+  - level: 3
+    title: "Recursive generation"
+    content: |
+      Define a recursive function that takes the current string, open count,
+      and close count:
+      1. If len(current) == 2×n, add to result
+      2. If open < n, recurse with '('
+      3. If close < open, recurse with ')'
+
+template: |
+  func generateParenthesis(n int) []string {
+      // Your code here
+      // Hint: Use backtracking with open/close counters
+      return nil
+  }
+
+test_cases:
+  - params: [3]
+    expected: ["((()))", "(()())", "(())()", "()(())", "()()()"]
+    description: "n=3 — five valid combinations"
+  - params: [1]
+    expected: ["()"]
+    description: "n=1 — single pair"
+  - params: [2]
+    expected: ["(())", "()()"]
+    description: "n=2 — two valid combinations"
+  - params: [4]
+    expected: ["(((())))", "((()()))", "((())())", "((()))()", "(()(()))", "(()()())", "(()())()", "(())(())", "(())()()", "()((()))", "()(()())", "()(())()", "()()(())", "()()()()"]
+    description: "n=4 — fourteen valid combinations"
+  - params: [0]
+    expected: [""]
+    description: "n=0 — empty string"
+
+constraints:
+  - "0 ≤ n ≤ 8"
+
+time_complexity_hint: "O(4ⁿ / √n)"
+space_complexity_hint: "O(4ⁿ / √n)"
+
+solution:
+  code: |
+    func generateParenthesis(n int) []string {
+        result := []string{}
+        var backtrack func(curr string, open, close int)
+        backtrack = func(curr string, open, close int) {
+            if len(curr) == 2*n {
+                result = append(result, curr)
+                return
+            }
+            if open < n {
+                backtrack(curr+"(", open+1, close)
+            }
+            if close < open {
+                backtrack(curr+")", open, close+1)
+            }
+        }
+        backtrack("", 0, 0)
+        return result
+    }
+  approach: "Backtracking with open/close counters"
+  time_complexity: "O(4ⁿ / √n)"
+  space_complexity: "O(4ⁿ / √n)"

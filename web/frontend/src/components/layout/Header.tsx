@@ -137,7 +137,7 @@ export const Header: React.FC<HeaderProps> = ({
                   aria-haspopup="true"
                 >
                   {user.avatar ? (
-                    <img src={user.avatar} alt={user.name} className="w-8 h-8 rounded-full object-cover" />
+                    <img src={user.avatar} alt={user.name} loading="lazy" className="w-8 h-8 rounded-full object-cover" />
                   ) : (
                     <div className="w-8 h-8 rounded-full bg-primary-500 flex items-center justify-center text-white text-sm font-medium">
                       {user.name.charAt(0).toUpperCase()}

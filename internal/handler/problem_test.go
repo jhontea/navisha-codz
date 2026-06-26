@@ -91,8 +91,8 @@ func TestListProblems_All(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected data to be array, got %T", resp.Data)
 	}
-	if len(problems) != 20 {
-		t.Errorf("expected 20 problems, got %d", len(problems))
+	if len(problems) != 25 {
+		t.Errorf("expected 25 problems, got %d", len(problems))
 	}
 
 	// Verify summary fields (no solution, no test_cases)
@@ -130,8 +130,8 @@ func TestListProblems_FilterByDifficulty(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected data to be array, got %T", resp.Data)
 	}
-	if len(problems) != 7 {
-		t.Errorf("expected 7 easy problems, got %d", len(problems))
+	if len(problems) != 9 {
+		t.Errorf("expected 9 easy problems, got %d", len(problems))
 	}
 }
 
@@ -324,9 +324,9 @@ func TestListProblems_FilterByCategory(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected data to be array, got %T", resp.Data)
 	}
-	// two-sum, merge-sorted-arrays, contains-duplicate, max-subarray, binary-search, majority-element, coin-change, trapping-rain-water, permutations are array category
-	if len(problems) != 9 {
-		t.Errorf("expected 9 array problems, got %d", len(problems))
+	// two-sum, merge-sorted-arrays, contains-duplicate, max-subarray, binary-search, majority-element, coin-change, trapping-rain-water, permutations, best-time-to-buy-sell-stock, product-of-array-except-self, first-missing-positive are array category
+	if len(problems) != 12 {
+		t.Errorf("expected 12 array problems, got %d", len(problems))
 	}
 }
 
@@ -457,8 +457,8 @@ func TestListProblems_FilterByType(t *testing.T) {
 		t.Fatalf("expected data to be array, got %T", resp.Data)
 	}
 	// All problems are function-based now
-	if len(problems) != 20 {
-		t.Errorf("expected 20 function problems, got %d", len(problems))
+	if len(problems) != 25 {
+		t.Errorf("expected 25 function problems, got %d", len(problems))
 	}
 }
 
@@ -494,8 +494,8 @@ func TestListProblems_FilterByTags(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected data to be array, got %T", resp.Data)
 	}
-	if len(problems) != 3 {
-		t.Errorf("expected 3 backtracking problems, got %d", len(problems))
+	if len(problems) != 4 {
+		t.Errorf("expected 4 backtracking problems, got %d", len(problems))
 	}
 }
 

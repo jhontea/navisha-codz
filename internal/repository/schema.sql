@@ -267,6 +267,9 @@ CREATE INDEX idx_problems_created_by ON problems(created_by);
 CREATE INDEX idx_problems_difficulty_category ON problems(difficulty, category_id);
 CREATE INDEX idx_problems_created_at ON problems(created_at DESC);
 
+-- Composite index untuk problem listing — filter difficulty+categories, sort by title
+CREATE INDEX idx_problems_listing ON problems(difficulty, category_id, title);
+
 -- Problem tags indexes
 CREATE INDEX idx_problem_tags_tag_name ON problem_tags(tag_name);
 CREATE INDEX idx_problem_tags_problem_id ON problem_tags(problem_id);
@@ -274,6 +277,9 @@ CREATE INDEX idx_problem_tags_problem_id ON problem_tags(problem_id);
 -- Test cases indexes
 CREATE INDEX idx_test_cases_problem_id ON test_cases(problem_id);
 CREATE INDEX idx_test_cases_is_hidden ON test_cases(is_hidden) WHERE is_hidden = FALSE;
+
+-- Composite index untuk test case queries — filter by problem + visibility
+CREATE INDEX idx_test_cases_problem_visibility ON test_cases(problem_id, is_hidden);
 
 -- Problem hints indexes
 CREATE INDEX idx_problem_hints_problem_id ON problem_hints(problem_id);
@@ -288,6 +294,9 @@ CREATE INDEX idx_submissions_user_problem ON submissions(user_id, problem_id);
 CREATE INDEX idx_submissions_user_status ON submissions(user_id, status);
 CREATE INDEX idx_submissions_problem_status ON submissions(problem_id, status);
 CREATE INDEX idx_submissions_score ON submissions(score DESC);
+
+-- Composite index untuk submission history — filter user+status, sort by submitted_at
+CREATE INDEX idx_submissions_history ON submissions(user_id, status, submitted_at DESC);
 
 -- Partial index untuk pending submissions (queue processing)
 CREATE INDEX idx_submissions_pending ON submissions(status, submitted_at)

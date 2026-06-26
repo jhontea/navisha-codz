@@ -396,13 +396,16 @@ CREATE INDEX idx_user_rating_history_user_id ON user_rating_history(user_id);
 ### Indeks Composite untuk Query Sering Dipakai
 ```cpp
 CREATE INDEX idx_problems_difficulty_category ON problems(difficulty, category_id);
+CREATE INDEX idx_problems_listing ON problems(difficulty, category_id, title);
 CREATE INDEX idx_submissions_user_problem ON submissions(user_id, problem_id);
 CREATE INDEX idx_submissions_user_status ON submissions(user_id, status);
+CREATE INDEX idx_submissions_history ON submissions(user_id, status, submitted_at DESC);
 CREATE INDEX idx_submissions_problem_status ON submissions(problem_id, status);
 CREATE INDEX idx_submissions_accepted ON submissions(user_id, problem_id, submitted_at DESC)
     WHERE status = 'accepted';
 CREATE INDEX idx_user_problem_status_user_status ON user_problem_status(user_id, status);
 CREATE INDEX idx_problem_hints_level ON problem_hints(problem_id, level);
+CREATE INDEX idx_test_cases_problem_visibility ON test_cases(problem_id, is_hidden);
 ```
 
 ### Indeks Partial
@@ -431,6 +434,95 @@ CREATE INDEX idx_leaderboard_weekly_rank ON leaderboard(weekly_rank);
 CREATE INDEX idx_leaderboard_monthly_rank ON leaderboard(monthly_rank);
 CREATE INDEX idx_leaderboard_all_time_rank ON leaderboard(all_time_rank);
 ```
+
+---
+
+## Indexing Strategy
+
+### 1. Problem Listing — `idx_problems_listing`
+
+```sql
+CREATE INDEX idx_problems_listing ON problems(difficulty, category_id, title);
+```
+
+**Query target:**
+```sql
+WHERE p.is_published = TRUE
+    AND ($1::problem_difficulty IS NULL OR p.difficulty = $1)
+    AND ($2::INTEGER IS NULL OR p.category_id = $2)
+ORDER BY CASE p.difficulty ... END, p.title
+```
+
+**Strategi:**
+- Composite 3-column index mencakup filter `difficulty` + `category_id` dan sorting `title` dalam satu index scan.
+- PostgreSQL dapat melakukan Index Scan + sort by `title` langsung tanpa memori sort karena `title` adalah kolom ketiga.
+- Untuk query tanpa filter category (`$2 IS NULL`), index tetap berguna untuk filter `difficulty` saja.
+
+**Trade-off:**
+- Index overhead: ~40 bytes/row × N problems (3 kolom integer+enum+varchar).
+- Write overhead minimal karena problems jarang di-update.
+- **Tidak menggantikan** `idx_problems_difficulty_category` — index 2-column lebih ringkas untuk query tanpa `ORDER BY title`.
+
+### 2. Submission History — `idx_submissions_history`
+
+```sql
+CREATE INDEX idx_submissions_history ON submissions(user_id, status, submitted_at DESC);
+```
+
+**Query target:**
+```sql
+WHERE s.user_id = $1 AND ($2 IS NULL OR s.status = $2)
+ORDER BY s.submitted_at DESC
+LIMIT $3 OFFSET $4;
+```
+
+**Strategi:**
+- Left-prefix `user_id` → `(user_id, status)` sudah ada di `idx_submissions_user_status`.
+- Dengan menambahkan `submitted_at DESC` sebagai kolom ketiga, ORDER BY tidak perlu sort terpisah — PostgreSQL membaca index langsung dalam urutan DESC.
+- `DESC` di definisi index penting karena query selalu `ORDER BY submitted_at DESC`.
+
+**Trade-off:**
+- Index size: ~32 bytes/row + UUID overhead (user_id 16 bytes, submitted_at 8 bytes + 4 byte status enum + tuple header).
+- Submissions table adalah tabel dengan write throughput tertinggi — setiap index tambahan memperlambat INSERT.
+- **Nilai tambah:** Partial indexes `idx_submissions_pending` dan `idx_submissions_running` tetap dipertahankan untuk queue polling.
+
+### 3. Test Case Visibility — `idx_test_cases_problem_visibility`
+
+```sql
+CREATE INDEX idx_test_cases_problem_visibility ON test_cases(problem_id, is_hidden);
+```
+
+**Query target:**
+```sql
+SELECT ... FROM test_cases WHERE problem_id = $1 AND is_hidden = FALSE;
+SELECT ... FROM test_cases WHERE problem_id = $1;
+```
+
+**Strategi:**
+- Composite index lebih unggul dari partial index `idx_test_cases_is_hidden WHERE is_hidden = FALSE` karena:
+  1. Mencakup **semua** query visibility (hidden, non-hidden, atau tanpa filter).
+  2. `is_hidden` sebagai boolean sangat selektif — partial index hanya berguna saat `is_hidden = FALSE`.
+  3. PostgreSQL bitmap scan bisa menggabungkan kedua kondisi efisien.
+
+**Trade-off:**
+- Overhead minimal (boolean 1 byte + integer 4 bytes).
+- Partial index `idx_test_cases_is_hidden` bisa di-drop jika composite index sudah cukup.
+- Untuk sample test cases (`is_sample = TRUE`), index ini tidak membantu — perlu query terpisah atau index tambahan.
+
+### Index Selection Guidelines
+
+| Pattern | Index Type | Column Order | Contoh |
+|---------|-----------|--------------|--------|
+| **Filter + Sort** | Composite B-tree | filter columns first, sort column last | `(difficulty, category_id, title)` |
+| **Filter by FK + boolean flag** | Composite B-tree | FK first, boolean second | `(problem_id, is_hidden)` |
+| **Range scan + sort** | Composite DESC | filter columns, sort DESC last | `(user_id, status, submitted_at DESC)` |
+| **Lookup by FK only** | Single-column B-tree | FK column | `idx_test_cases_problem_id` |
+| **Boolean partial** | Partial B-tree | WHERE clause matching query | `WHERE is_published = TRUE` |
+
+Best practices:
+- **High: Low cardinality filter first** (enum → FK → sort column) mengurangi branching.
+- **Drop redundant indexes** jika composite index sudah mencakup workload.
+- **Monitor index usage** via `pg_stat_user_indexes` — drop unused indexes.
 
 ---
 

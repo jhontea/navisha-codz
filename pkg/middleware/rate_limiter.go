@@ -135,6 +135,194 @@ func (rl *RateLimiter) RateLimitMiddleware() gin.HandlerFunc {
 	}
 }
 
+// ============================================================================
+// TieredRateLimiter — per-user-tier rate limiting
+// ============================================================================
+
+// Tier represents a user rate-limit tier.
+type Tier string
+
+const (
+	TierFree    Tier = "free"
+	TierPremium Tier = "premium"
+	TierAdmin   Tier = "admin"
+)
+
+// TierLimits holds the rate limits for a single tier.
+type TierLimits struct {
+	RunLimit int           // Max POST /run requests per window
+	GetLimit int           // Max GET requests per window
+	Window   time.Duration // Sliding window duration
+}
+
+// DefaultTierLimits returns the default tier configuration.
+func DefaultTierLimits() map[Tier]TierLimits {
+	return map[Tier]TierLimits{
+		TierFree: {
+			RunLimit: 10,
+			GetLimit: 30,
+			Window:   time.Minute,
+		},
+		TierPremium: {
+			RunLimit: 100,
+			GetLimit: 300,
+			Window:   time.Minute,
+		},
+		TierAdmin: {
+			RunLimit: 0, // 0 means unlimited
+			GetLimit: 0, // 0 means unlimited
+			Window:   time.Minute,
+		},
+	}
+}
+
+// TieredRateLimiter provides per-user-tier rate limiting based on JWT role.
+type TieredRateLimiter struct {
+	mu       sync.RWMutex
+	visitors map[string]*tieredVisitor
+	limits   map[Tier]TierLimits
+	window   time.Duration
+}
+
+type tieredVisitor struct {
+	count    int
+	lastSeen time.Time
+}
+
+// NewTieredRateLimiter creates a new tiered rate limiter with default limits.
+func NewTieredRateLimiter() *TieredRateLimiter {
+	trl := &TieredRateLimiter{
+		visitors: make(map[string]*tieredVisitor),
+		window:   time.Minute,
+	}
+	go trl.cleanup()
+	return trl
+}
+
+// WithLimits sets custom tier limits.
+func (trl *TieredRateLimiter) WithLimits(limits map[Tier]TierLimits) *TieredRateLimiter {
+	trl.mu.Lock()
+	defer trl.mu.Unlock()
+	trl.limits = limits
+	return trl
+}
+
+// getLimits returns the tier limits map, initialising with defaults if nil.
+func (trl *TieredRateLimiter) getLimits() map[Tier]TierLimits {
+	if trl.limits == nil {
+		trl.limits = DefaultTierLimits()
+	}
+	return trl.limits
+}
+
+// resolveTier maps a JWT role string to a Tier.
+func resolveTier(role interface{}) Tier {
+	if role == nil {
+		return TierFree
+	}
+	roleStr, ok := role.(string)
+	if !ok || roleStr == "" {
+		return TierFree
+	}
+	switch strings.ToLower(roleStr) {
+	case "admin":
+		return TierAdmin
+	case "premium":
+		return TierPremium
+	default:
+		return TierFree
+	}
+}
+
+// pathNeedsRunLimit returns true if the request path matches a code-run endpoint.
+func pathNeedsRunLimit(path string) bool {
+	return strings.Contains(path, "/run") || strings.Contains(path, "/validate")
+}
+
+// TieredRateLimitMiddleware creates a Gin middleware that rate-limits by
+// user tier (free/premium/admin). It reads the role from the JWT claims
+// stored in the Gin context by AuthMiddleware.
+func (trl *TieredRateLimiter) TieredRateLimitMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Determine the user's tier from the JWT role in context
+		role, _ := c.Get(ContextKeyRole)
+		tier := resolveTier(role)
+
+		// Set X-RateLimit-Tier response header
+		c.Header("X-RateLimit-Tier", string(tier))
+
+		// Admin tier — unlimited, pass through immediately
+		if tier == TierAdmin {
+			c.Next()
+			return
+		}
+
+		limits := trl.getLimits()
+		tierLimit, ok := limits[tier]
+		if !ok {
+			// Fallback to free if tier not configured
+			tierLimit = limits[TierFree]
+		}
+
+		// Determine which limit to apply based on request path
+		limit := tierLimit.GetLimit
+		if pathNeedsRunLimit(c.FullPath()) {
+			limit = tierLimit.RunLimit
+		}
+
+		// Unlimited check (0 = unlimited)
+		if limit <= 0 {
+			c.Next()
+			return
+		}
+
+		// Build a unique key: user ID (or IP) + path
+		key := c.ClientIP()
+		if userID, exists := c.Get(ContextKeyUserID); exists {
+			key = userID.(string)
+		}
+		key = fmt.Sprintf("%s:%s", key, c.FullPath())
+
+		now := time.Now()
+
+		trl.mu.Lock()
+		v, exists := trl.visitors[key]
+
+		if !exists || now.Sub(v.lastSeen) > trl.window {
+			trl.visitors[key] = &tieredVisitor{count: 1, lastSeen: now}
+			// Set rate limit headers
+			c.Header("X-RateLimit-Limit", fmt.Sprintf("%d", limit))
+			c.Header("X-RateLimit-Remaining", fmt.Sprintf("%d", limit-1))
+			c.Header("X-RateLimit-Reset", fmt.Sprintf("%d", now.Add(trl.window).Unix()))
+			trl.mu.Unlock()
+			c.Next()
+			return
+		}
+
+		v.count++
+		v.lastSeen = now
+		remaining := limit - v.count
+		if remaining < 0 {
+			remaining = 0
+		}
+		// Set rate limit headers
+		c.Header("X-RateLimit-Limit", fmt.Sprintf("%d", limit))
+		c.Header("X-RateLimit-Remaining", fmt.Sprintf("%d", remaining))
+		c.Header("X-RateLimit-Reset", fmt.Sprintf("%d", now.Add(trl.window).Unix()))
+		trl.mu.Unlock()
+
+		if v.count > limit {
+			c.AbortWithStatusJSON(429, gin.H{
+				"error":       "rate limit exceeded",
+				"retry_after": trl.window.Seconds(),
+			})
+			return
+		}
+
+		c.Next()
+	}
+}
+
 // GetClientIP extracts the real client IP from request headers, checking
 // X-Forwarded-For and X-Real-Ip before falling back to RemoteAddr.
 func GetClientIP(c *gin.Context) string {
@@ -260,5 +448,21 @@ func (erl *EndpointRateLimiter) cleanup() {
 			}
 		}
 		erl.mu.Unlock()
+	}
+}
+
+func (trl *TieredRateLimiter) cleanup() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		trl.mu.Lock()
+		now := time.Now()
+		for key, v := range trl.visitors {
+			if now.Sub(v.lastSeen) > trl.window*2 {
+				delete(trl.visitors, key)
+			}
+		}
+		trl.mu.Unlock()
 	}
 }

@@ -1,0 +1,98 @@
+id: "product-of-array-except-self"
+title: "Product of Array Except Self"
+type: "function"
+difficulty: "medium"
+category: "array"
+tags: ["array", "prefix-sum"]
+
+description: |
+  Given an integer array `nums`, return an array `answer` such that
+  `answer[i]` is equal to the product of all the elements of `nums`
+  except `nums[i]`.
+
+  You must solve it **without using division** and in O(n) time.
+
+function_name: "productExceptSelf"
+parameters:
+  - name: "nums"
+    type: "[]int"
+    description: "Array of integers"
+return_type: "[]int"
+
+examples:
+  - input: "nums = [1,2,3,4]"
+    output: "[24,12,8,6]"
+    explanation: "answer[0]=2×3×4=24, answer[1]=1×3×4=12, answer[2]=1×2×4=8, answer[3]=1×2×3=6"
+  - input: "nums = [-1,1,0,-3,3]"
+    output: "[0,0,9,0,0]"
+    explanation: "Only the index with 0 produces non-zero product."
+
+hints:
+  - level: 1
+    title: "Product of left and right"
+    content: "For each position i, the answer is the product of all elements to the left of i times the product of all elements to the right of i."
+  - level: 2
+    title: "Two passes"
+    content: "Compute prefix products in one pass (left to right), then suffix products in another pass (right to left), and multiply them together."
+  - level: 3
+    title: "O(1) extra space"
+    content: |
+      Use the output array itself to store prefix products in the first pass.
+      In the second pass, traverse from right to left, keep a running suffix
+      product, and multiply each prefix product by the suffix product.
+
+template: |
+  func productExceptSelf(nums []int) []int {
+      // Your code here
+      // Hint: Compute prefix products, then suffix products
+      return nil
+  }
+
+test_cases:
+  - params: [[1, 2, 3, 4]]
+    expected: [24, 12, 8, 6]
+    description: "Standard case"
+  - params: [[-1, 1, 0, -3, 3]]
+    expected: [0, 0, 9, 0, 0]
+    description: "Contains a zero"
+  - params: [[0, 0]]
+    expected: [0, 0]
+    description: "Multiple zeros"
+  - params: [[2, 3]]
+    expected: [3, 2]
+    description: "Two elements"
+  - params: [[5]]
+    expected: [1]
+    description: "Single element"
+
+constraints:
+  - "1 ≤ len(nums) ≤ 10⁵"
+  - "-30 ≤ nums[i] ≤ 30"
+  - "The product of any prefix or suffix fits in a 32-bit integer."
+
+time_complexity_hint: "O(n)"
+space_complexity_hint: "O(1) excluding output array"
+
+solution:
+  code: |
+    func productExceptSelf(nums []int) []int {
+        n := len(nums)
+        result := make([]int, n)
+        
+        prefix := 1
+        for i := 0; i < n; i++ {
+            result[i] = prefix
+            prefix *= nums[i]
+        }
+        
+        suffix := 1
+        for i := n - 1; i >= 0; i-- {
+            result[i] *= suffix
+            suffix *= nums[i]
+        }
+        
+        return result
+    }
+  approach: "Prefix and suffix products in two passes"
+  time_complexity: "O(n)"
+  space_complexity: "O(1) excluding output"

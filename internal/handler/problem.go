@@ -46,7 +46,12 @@ func writeSuccessResponse(c *gin.Context, data interface{}) {
 }
 
 // writeErrorResponse writes a standard error response.
+// For 5xx errors, the error is also captured in Sentry.
 func writeErrorResponse(c *gin.Context, code int, errType, message string) {
+	if code >= 500 {
+		middleware.CaptureError(c, fmt.Errorf("%s: %s", errType, message), message)
+	}
+
 	c.JSON(code, model.APIErrorResponse{
 		Error: &model.APIErrorDetail{
 			Message: message,

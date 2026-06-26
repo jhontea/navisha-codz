@@ -14,6 +14,7 @@ import (
 	"coding-challange/internal/handler"
 	"coding-challange/internal/repository"
 	"coding-challange/internal/service"
+	"coding-challange/pkg/middleware"
 )
 
 // @title           Coding Challenge API
@@ -33,8 +34,17 @@ import (
 
 // @schemes   http https
 func main() {
+	// Initialize Sentry (no-op if SENTRY_DSN is not set)
+	if err := middleware.InitSentry(); err != nil {
+		log.Printf("WARNING: %v", err)
+	}
+	defer middleware.FlushSentry()
+
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
+
+	// Sentry middleware — captures panics and request context
+	router.Use(middleware.SentryMiddleware())
 
 	// Initialize repository, services, and handler
 	repo, err := repository.NewProblemRepository("problems")

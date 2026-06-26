@@ -8,6 +8,41 @@ http://localhost:9100
 
 ---
 
+## API Versioning
+
+API ini mendukung versioning melalui **URL prefix** dan **response header**.
+
+### Base URL per Version
+
+| Version | Base URL Path | Status |
+|---------|---------------|--------|
+| `v1`    | `/v1/...`     | ✅ Aktif |
+| Legacy  | `/api/...`    | ✅ Backward compatibility (akan di-*deprecate*) |
+
+### Version Header
+
+Setiap response menyertakan header:
+
+| Header | Example | Keterangan |
+|--------|---------|------------|
+| `X-API-Version` | `v1` | Menunjukkan versi API yang melayani request |
+
+### Contoh Request
+
+```bash
+# Via versioned prefix (recommended)
+curl http://localhost:9100/v1/problems
+
+# Via legacy prefix (backward compatible)
+curl http://localhost:9100/api/problems
+```
+
+Kedua endpoint di atas mengembalikan response yang identik, termasuk header `X-API-Version: v1`.
+
+> **Catatan**: Gunakan `/v1/` untuk semua integrasi baru. Prefix `/api/` tetap berfungsi untuk backward compatibility tetapi akan dihapus di rilis mendatang.
+
+---
+
 ## Response Format
 
 Semua response menggunakan JSON dengan `Content-Type: application/json`.
@@ -634,14 +669,30 @@ GET /health
 
 ## Rate Limiting
 
-| Endpoint | Limit | Window |
-|----------|-------|--------|
-| `GET /api/problems` | 60 requests | per minute |
-| `GET /api/problems/:id` | 60 requests | per minute |
-| `POST /api/problems/:id/run` | 10 requests | per minute |
-| `POST /api/validate` | 30 requests | per minute |
+Rate limiting diterapkan secara per-user tier berdasarkan role dari JWT claims (field `role`).
 
-Saat rate limit tercapai, API mengembalikan status `429 Too Many Requests`:
+### Tiers
+
+| Tier | Role di JWT | GET /api/* | POST /run & POST /validate |
+|------|-------------|------------|----------------------------|
+| **Free** | `user` (default) | 30 requests/min | 10 requests/min |
+| **Premium** | `premium` | 300 requests/min | 100 requests/min |
+| **Admin** | `admin` | Unlimited | Unlimited |
+
+### Response Headers
+
+Setiap response dari endpoint yang di-rate-limit menyertakan header berikut:
+
+| Header | Contoh | Keterangan |
+|--------|--------|------------|
+| `X-RateLimit-Tier` | `free` / `premium` / `admin` | Tier user saat ini |
+| `X-RateLimit-Limit` | `30` | Batas maksimum requests dalam window |
+| `X-RateLimit-Remaining` | `25` | Sisa requests yang tersisa |
+| `X-RateLimit-Reset` | `1719360000` | Unix timestamp saat window reset |
+
+### Ketika Rate Limit Tercapai
+
+API mengembalikan status `429 Too Many Requests`:
 
 ```json
 {

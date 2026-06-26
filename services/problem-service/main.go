@@ -127,9 +127,19 @@ func main() {
 }
 
 func (s *Server) setupRoutes() {
+	// API Version middleware — sets X-API-Version header on all API responses
+	apiVersion := func(version string) gin.HandlerFunc {
+		return func(c *gin.Context) {
+			c.Header("X-API-Version", version)
+			c.Next()
+		}
+	}
+
 	s.router.GET("/health", s.healthCheck)
 
+	// ── Legacy routes (backward compatibility) ──
 	api := s.router.Group("/api")
+	api.Use(apiVersion("v1"))
 	{
 		// Public routes
 		api.GET("/problems", s.listProblems)
@@ -143,6 +153,25 @@ func (s *Server) setupRoutes() {
 		{
 			admin.POST("", s.createProblem)
 			admin.PUT("/:id", s.updateProblem)
+		}
+	}
+
+	// ── Versioned routes /v1 ──
+	v1 := s.router.Group("/v1")
+	v1.Use(apiVersion("v1"))
+	{
+		// Public routes
+		v1.GET("/problems", s.listProblems)
+		v1.GET("/problems/:id", s.getProblem)
+		v1.GET("/problems/:id/test-cases", s.getTestCases)
+
+		// Admin routes
+		adminV1 := v1.Group("/problems")
+		adminV1.Use(middleware.AuthMiddleware(s.jwtConfig, nil, nil))
+		adminV1.Use(middleware.RoleMiddleware("admin"))
+		{
+			adminV1.POST("", s.createProblem)
+			adminV1.PUT("/:id", s.updateProblem)
 		}
 	}
 }

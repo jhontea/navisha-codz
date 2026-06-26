@@ -264,6 +264,35 @@ services:
     networks:
       - coding-challange
 
+  # Notification Service
+  notification-service:
+    build:
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+    container_name: coding-challange-notification
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      PORT: 9108
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
+      SMTP_HOST: ${SMTP_HOST:-smtp.example.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM_ADDR: ${SMTP_FROM_ADDR:-noreply@codingchallange.com}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Coding Challenge}
+      LOG_LEVEL: debug
+    ports:
+      - "9108:9108"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - coding-challange
+
   # ============================================
   # Gateway
   # ============================================
