@@ -1,0 +1,460 @@
+{
+  "dashboard": {
+    "title": "PostgreSQL Database",
+    "uid": "coding-challange-postgres",
+    "description": "PostgreSQL performance monitoring — connections, query time, cache hit ratio, and throughput",
+    "timezone": "browser",
+    "editable": true,
+    "refresh": "30s",
+    "panels": [
+      {
+        "title": "Active Connections",
+        "type": "timeseries",
+        "id": 1,
+        "gridPos": {"x": 0, "y": 0, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "pg_stat_database_numbackends{datname=~\"coding_challange|postgres\"}",
+            "legendFormat": "{{datname}}",
+            "interval": "30s"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "min": 0,
+            "custom": {
+              "spanNulls": true,
+              "lineInterpolation": "smooth",
+              "showPoints": "never"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 50},
+                {"color": "red", "value": 80}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "title": "Connection Pool Usage (%)",
+        "type": "timeseries",
+        "id": 2,
+        "gridPos": {"x": 8, "y": 0, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "pg_stat_database_numbackends{datname=\"coding_challange\"} / 100 * 100",
+            "legendFormat": "Pool %",
+            "interval": "30s"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "custom": {
+              "spanNulls": true,
+              "lineInterpolation": "smooth",
+              "showPoints": "never"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 60},
+                {"color": "red", "value": 85}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "title": "Idle vs Active Connections",
+        "type": "timeseries",
+        "id": 3,
+        "gridPos": {"x": 16, "y": 0, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "pg_stat_activity_count{datname=\"coding_challange\", state=\"active\"}",
+            "legendFormat": "Active",
+            "interval": "30s"
+          },
+          {
+            "expr": "pg_stat_activity_count{datname=\"coding_challange\", state=\"idle\"}",
+            "legendFormat": "Idle",
+            "interval": "30s"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "min": 0,
+            "custom": {
+              "spanNulls": true,
+              "lineInterpolation": "smooth",
+              "showPoints": "never"
+            }
+          }
+        }
+      },
+      {
+        "title": "Cache Hit Ratio",
+        "type": "timeseries",
+        "id": 4,
+        "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(pg_stat_database_blks_hit{datname=\"coding_challange\"}[5m]) / (rate(pg_stat_database_blks_hit{datname=\"coding_challange\"}[5m]) + rate(pg_stat_database_blks_read{datname=\"coding_challange\"}[5m])) * 100",
+            "legendFormat": "Cache Hit %",
+            "interval": "30s"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "custom": {
+              "spanNulls": true,
+              "lineInterpolation": "smooth",
+              "showPoints": "never"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 90},
+                {"color": "green", "value": 99}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "title": "Cache Reads (Blks Hit vs Read)",
+        "type": "timeseries",
+        "id": 5,
+        "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(pg_stat_database_blks_hit{datname=\"coding_challange\"}[1m])",
+            "legendFormat": "Cache Hit (blks/s)",
+            "interval": "30s"
+          },
+          {
+            "expr": "rate(pg_stat_database_blks_read{datname=\"coding_challange\"}[1m])",
+            "legendFormat": "Cache Miss / Disk Read (blks/s)",
+            "interval": "30s"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "pps",
+            "min": 0,
+            "custom": {
+              "spanNulls": true,
+              "lineInterpolation": "smooth",
+              "showPoints": "never"
+            }
+          }
+        }
+      },
+      {
+        "title": "Query Throughput (Tuples/s)",
+        "type": "timeseries",
+        "id": 6,
+        "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(pg_stat_database_tup_fetched{datname=\"coding_challange\"}[1m])",
+            "legendFormat": "Fetched",
+            "interval": "30s"
+          },
+          {
+            "expr": "rate(pg_stat_database_tup_returned{datname=\"coding_challange\"}[1m])",
+            "legendFormat": "Returned (Seq Scan)",
+            "interval": "30s"
+          },
+          {
+            "expr": "rate(pg_stat_database_tup_inserted{datname=\"coding_challange\"}[1m])",
+            "legendFormat": "Inserted",
+            "interval": "30s"
+          },
+          {
+            "expr": "rate(pg_stat_database_tup_updated{datname=\"coding_challange\"}[1m])",
+            "legendFormat": "Updated",
+            "interval": "30s"
+          },
+          {
+            "expr": "rate(pg_stat_database_tup_deleted{datname=\"coding_challange\"}[1m])",
+            "legendFormat": "Deleted",
+            "interval": "30s"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "pps",
+            "min": 0,
+            "custom": {
+              "spanNulls": true,
+              "lineInterpolation": "smooth",
+              "showPoints": "never"
+            }
+          }
+        }
+      },
+      {
+        "title": "Transactions (commit / rollback)",
+        "type": "timeseries",
+        "id": 7,
+        "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(pg_stat_database_xact_commit{datname=\"coding_challange\"}[1m])",
+            "legendFormat": "Commits/s",
+            "interval": "30s"
+          },
+          {
+            "expr": "rate(pg_stat_database_xact_rollback{datname=\"coding_challange\"}[1m])",
+            "legendFormat": "Rollbacks/s",
+            "interval": "30s"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "tps",
+            "min": 0,
+            "custom": {
+              "spanNulls": true,
+              "lineInterpolation": "smooth",
+              "showPoints": "never"
+            }
+          }
+        }
+      },
+      {
+        "title": "Query Duration (max query time)",
+        "type": "timeseries",
+        "id": 8,
+        "gridPos": {"x": 0, "y": 24, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "pg_stat_activity_max_tx_duration{datname=\"coding_challange\"}",
+            "legendFormat": "Longest running query (s)",
+            "interval": "30s"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "min": 0,
+            "custom": {
+              "spanNulls": true,
+              "lineInterpolation": "smooth",
+              "showPoints": "never"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 10},
+                {"color": "red", "value": 60}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "title": "Deadlocks",
+        "type": "timeseries",
+        "id": 9,
+        "gridPos": {"x": 12, "y": 24, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(pg_stat_database_deadlocks{datname=\"coding_challange\"}[1m])",
+            "legendFormat": "Deadlocks/s",
+            "interval": "30s"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "cps",
+            "min": 0,
+            "custom": {
+              "spanNulls": true,
+              "lineInterpolation": "smooth",
+              "showPoints": "never"
+            },
+            "color": {"mode": "palette-classic"}
+          }
+        }
+      },
+      {
+        "title": "Database Size",
+        "type": "stat",
+        "id": 10,
+        "gridPos": {"x": 0, "y": 32, "w": 4, "h": 4},
+        "targets": [
+          {
+            "expr": "pg_database_size_bytes{datname=\"coding_challange\"}",
+            "legendFormat": "{{datname}}",
+            "interval": "60s"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "custom": {"displayMode": "color-background"},
+            "color": {"mode": "thresholds"}
+          }
+        },
+        "options": {
+          "orientation": "horizontal",
+          "reduceOptions": {"calcs": ["lastNotNull"]},
+          "textMode": "value_and_name"
+        }
+      },
+      {
+        "title": "Buffers (checkpoints / backend writes)",
+        "type": "timeseries",
+        "id": 11,
+        "gridPos": {"x": 4, "y": 32, "w": 10, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(pg_stat_bgwriter_buffers_checkpoint[1m])",
+            "legendFormat": "Checkpoint",
+            "interval": "30s"
+          },
+          {
+            "expr": "rate(pg_stat_bgwriter_buffers_clean[1m])",
+            "legendFormat": "Clean (bgwriter)",
+            "interval": "30s"
+          },
+          {
+            "expr": "rate(pg_stat_bgwriter_buffers_backend[1m])",
+            "legendFormat": "Backend writes",
+            "interval": "30s"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "pps",
+            "min": 0,
+            "custom": {
+              "spanNulls": true,
+              "lineInterpolation": "smooth",
+              "showPoints": "never"
+            }
+          }
+        }
+      },
+      {
+        "title": "Checkpoints / hour",
+        "type": "stat",
+        "id": 12,
+        "gridPos": {"x": 14, "y": 32, "w": 10, "h": 4},
+        "targets": [
+          {
+            "expr": "rate(pg_stat_bgwriter_checkpoints_timed[1h])",
+            "legendFormat": "Timed checkpoints/h",
+            "interval": "60s"
+          },
+          {
+            "expr": "rate(pg_stat_bgwriter_checkpoints_req[1h])",
+            "legendFormat": "Requested checkpoints/h",
+            "interval": "60s"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "custom": {"displayMode": "color-background"},
+            "color": {"mode": "thresholds"}
+          }
+        },
+        "options": {
+          "orientation": "horizontal",
+          "reduceOptions": {"calcs": ["rate", "lastNotNull"]},
+          "textMode": "value_and_name"
+        }
+      },
+      {
+        "title": "Hit Ratio Stat (instant)",
+        "type": "stat",
+        "id": 13,
+        "gridPos": {"x": 4, "y": 40, "w": 4, "h": 4},
+        "targets": [
+          {
+            "expr": "(sum(pg_stat_database_blks_hit{datname=\"coding_challange\"}) / (sum(pg_stat_database_blks_hit{datname=\"coding_challange\"}) + sum(pg_stat_database_blks_read{datname=\"coding_challange\"}))) * 100",
+            "legendFormat": "",
+            "interval": "60s"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "custom": {"displayMode": "color-background"},
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 95},
+                {"color": "green", "value": 99}
+              ]
+            }
+          }
+        },
+        "options": {
+          "orientation": "horizontal",
+          "reduceOptions": {"calcs": ["lastNotNull"]},
+          "textMode": "value_and_name"
+        }
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "datname",
+          "type": "query",
+          "label": "Database",
+          "query": "label_values(pg_stat_database_numbackends, datname)",
+          "sort": 1,
+          "current": {"text": "coding_challange", "value": "coding_challange"},
+          "includeAll": false,
+          "refresh": 1,
+          "multi": false
+        }
+      ]
+    },
+    "annotations": {
+      "list": [
+        {
+          "name": "Migration",
+          "type": "dashboard",
+          "builtIn": 1,
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "enable": true,
+          "iconColor": "purple"
+        }
+      ]
+    },
+    "links": [
+      {
+        "title": "Services Overview",
+        "type": "dashboards",
+        "tags": ["services"]
+      }
+    ],
+    "tags": ["postgres", "database", "monitoring", "coding-challange"],
+    "schemaVersion": 39,
+    "version": 1,
+    "gnetId": null
+  }
+}

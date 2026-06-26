@@ -19,6 +19,7 @@ import (
 	"github.com/google/uuid"
 
 	"coding-challange/pkg/logger"
+	"coding-challange/pkg/middleware"
 )
 
 // ServiceEndpoint represents a backend service.
@@ -120,86 +121,7 @@ func (cb *CircuitBreaker) State() CircuitState {
 	return cb.state
 }
 
-// RateLimiter implements token bucket rate limiting per key.
-type RateLimiter struct {
-	mu       sync.RWMutex
-	visitors map[string]*rateLimitEntry
-	limit    int
-	window   time.Duration
-}
-
-type rateLimitEntry struct {
-	tokens    int
-	lastCheck time.Time
-}
-
-// NewRateLimiter creates a new rate limiter.
-func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
-	rl := &RateLimiter{
-		visitors: make(map[string]*rateLimitEntry),
-		limit:    limit,
-		window:   window,
-	}
-	go rl.cleanup()
-	return rl
-}
-
-// Allow checks if a request is allowed for the given key.
-func (rl *RateLimiter) Allow(key string) bool {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-
-	now := time.Now()
-	entry, exists := rl.visitors[key]
-
-	if !exists {
-		rl.visitors[key] = &rateLimitEntry{
-			tokens:    rl.limit - 1,
-			lastCheck: now,
-		}
-		return true
-	}
-
-	// Refill tokens based on time elapsed
-	elapsed := now.Sub(entry.lastCheck)
-	tokensToAdd := int(int64(elapsed) * int64(rl.limit) / int64(rl.window))
-	if tokensToAdd > 0 {
-		entry.tokens = min(entry.tokens+tokensToAdd, rl.limit)
-		entry.lastCheck = now
-	}
-
-	if entry.tokens > 0 {
-		entry.tokens--
-		return true
-	}
-
-	return false
-}
-
-func (rl *RateLimiter) cleanup() {
-	ticker := time.NewTicker(rl.window)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		rl.mu.Lock()
-		now := time.Now()
-		for key, entry := range rl.visitors {
-			if now.Sub(entry.lastCheck) > rl.window*2 {
-				delete(rl.visitors, key)
-			}
-		}
-		rl.mu.Unlock()
-	}
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-// LoadBalancer implements round-robin load balancing.
+// NewLoadBalancer creates a new load balancer.
 type LoadBalancer struct {
 	mu        sync.Mutex
 	endpoints []*ServiceEndpoint
@@ -267,7 +189,7 @@ type Gateway struct {
 	log            *logger.Logger
 	loadBalancers  map[string]*LoadBalancer
 	circuitBreakers map[string]*CircuitBreaker
-	rateLimiter    *RateLimiter
+	rateLimiter    *middleware.RateLimiter
 	jwtSecret      string
 }
 
@@ -295,7 +217,7 @@ func NewGateway(config GatewayConfig) *Gateway {
 		log:             logger.NewDefault("api-gateway"),
 		loadBalancers:   make(map[string]*LoadBalancer),
 		circuitBreakers: make(map[string]*CircuitBreaker),
-		rateLimiter:     NewRateLimiter(config.RateLimitPerMin, time.Minute),
+		rateLimiter:     middleware.NewRateLimiter(config.RateLimitPerMin, time.Minute),
 		jwtSecret:       config.JWTSecret,
 	}
 
@@ -331,7 +253,7 @@ func (gw *Gateway) Setup() {
 	gw.router.Use(gw.requestIDMiddleware())
 	gw.router.Use(gw.loggerMiddleware())
 	gw.router.Use(gw.corsMiddleware())
-	gw.router.Use(gw.rateLimitMiddleware())
+	gw.router.Use(gw.rateLimiter.RateLimitMiddleware())
 
 	// Health endpoints (no auth required)
 	gw.router.GET("/health", gw.healthHandler())
@@ -359,7 +281,7 @@ func (gw *Gateway) Setup() {
 			protected.GET("/submissions/:id", gw.proxyTo("execution-service"))
 			protected.GET("/submissions/user/:userId", gw.proxyTo("execution-service"))
 			protected.GET("/leaderboard", gw.proxyTo("leaderboard-service"))
-			protected.GET("/hints/:problemId", gw.proxyTo("hint-service"))
+			protected.GET("/problems/:id/hints", gw.proxyTo("hint-service"))
 			protected.GET("/users/me", gw.proxyTo("auth-service"))
 		}
 
@@ -481,9 +403,21 @@ func (gw *Gateway) loggerMiddleware() gin.HandlerFunc {
 }
 
 func (gw *Gateway) corsMiddleware() gin.HandlerFunc {
+	allowedOrigins := os.Getenv("ALLOWED_ORIGINS")
+	originMap := make(map[string]bool)
+	if allowedOrigins != "" {
+		for _, o := range strings.Split(allowedOrigins, ",") {
+			originMap[strings.TrimSpace(o)] = true
+		}
+	}
 	return func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		origin := c.Request.Header.Get("Origin")
+		if originMap[origin] {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+			c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		} else if len(originMap) == 0 && origin == "" {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", "")
+		}
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, X-Request-ID")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE, PATCH")
 		c.Writer.Header().Set("Access-Control-Max-Age", "86400")
@@ -497,33 +431,7 @@ func (gw *Gateway) corsMiddleware() gin.HandlerFunc {
 	}
 }
 
-func (gw *Gateway) rateLimitMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// Rate limit by IP
-		ip := c.ClientIP()
-		if !gw.rateLimiter.Allow(fmt.Sprintf("ip:%s", ip)) {
-			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-				"error": "rate limit exceeded",
-				"code":  "RATE_LIMITED",
-			})
-			return
-		}
-
-		// Rate limit by user if authenticated
-		if userID, exists := c.Get("userID"); exists {
-			if !gw.rateLimiter.Allow(fmt.Sprintf("user:%v", userID)) {
-				c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-					"error": "rate limit exceeded",
-					"code":  "RATE_LIMITED",
-				})
-				return
-			}
-		}
-
-		c.Next()
-	}
-}
-
+// jwtAuthMiddleware
 func (gw *Gateway) jwtAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
@@ -747,9 +655,10 @@ func (gw *Gateway) Run(addr string) error {
 }
 
 func main() {
+	jwtSecret := getEnvRequired("JWT_ACCESS_SECRET")
 	config := GatewayConfig{
 		Port:             getEnvInt("PORT", 9100),
-		JWTSecret:        getEnv("JWT_ACCESS_SECRET", "dev-access-secret-key"),
+		JWTSecret:        jwtSecret,
 		RateLimitPerMin:  getEnvInt("RATE_LIMIT_PER_MIN", 100),
 		CircuitThreshold: getEnvInt("CIRCUIT_THRESHOLD", 5),
 		CircuitTimeout:   getEnvInt("CIRCUIT_TIMEOUT_SEC", 30),
@@ -798,6 +707,14 @@ func main() {
 	if err := gateway.Run(fmt.Sprintf(":%d", config.Port)); err != nil {
 		log.Fatalf("Failed to start gateway: %v", err)
 	}
+}
+
+func getEnvRequired(key string) string {
+	if v, ok := os.LookupEnv(key); ok && v != "" {
+		return v
+	}
+	log.Fatalf("required environment variable %q is not set", key)
+	return ""
 }
 
 func getEnv(key, fallback string) string {

@@ -216,7 +216,7 @@ const (
 	TTLUser        = 1 * time.Hour
 	TTLUserStats   = 5 * time.Minute
 	TTLProblem     = 30 * time.Minute
-	TTLProblemList = 10 * time.Minute
+	TTLProblemList = 5 * time.Minute
 	TTLLeaderboard = 1 * time.Minute
 	TTLSubmission  = 5 * time.Minute
 	TTLRateLimit   = 1 * time.Minute

@@ -1,13 +1,11 @@
 # Dockerfile for Code Runner Sandbox
-# This image is used to execute user-submitted Go code in an isolated environment.
+# This image executes user-submitted Go code in an isolated environment.
+# Build: docker build -f runner/Dockerfile.runner -t coding-challenge-runner:latest .
 
 FROM golang:1.21-alpine
 
 # Create a non-root user for running code
 RUN adduser -D -u 1000 runner
-
-# Remove unnecessary tools that could be used for exploitation
-RUN rm -rf /usr/local/go/bin/go /usr/bin/curl /usr/bin/wget /usr/bin/nc
 
 # Set up a minimal workspace
 WORKDIR /app

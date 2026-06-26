@@ -3,6 +3,7 @@ package middleware
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +13,8 @@ import (
 
 func init() {
 	gin.SetMode(gin.TestMode)
+	os.Setenv("JWT_ACCESS_SECRET", "test-access-secret")
+	os.Setenv("JWT_REFRESH_SECRET", "test-refresh-secret")
 }
 
 // Test JWT validation
@@ -473,8 +476,9 @@ func TestCORSMiddleware(t *testing.T) {
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
-	if w.Header().Get("Access-Control-Allow-Origin") != "*" {
-		t.Error("expected Access-Control-Allow-Origin: *")
+	// Expect Access-Control-Allow-Origin: * when no ALLOWED_ORIGINS is configured
+	if got := w.Header().Get("Access-Control-Allow-Origin"); got != "*" {
+		t.Errorf("expected Access-Control-Allow-Origin: *, got: %q", got)
 	}
 }
 

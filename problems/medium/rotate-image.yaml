@@ -1,0 +1,95 @@
+id: "rotate-image"
+title: "Rotate Image"
+type: "function"
+difficulty: "medium"
+category: "matrix"
+tags: ["matrix", "array", "math"]
+
+description: |
+  You are given an `n × n` 2D matrix representing an image. Rotate the image
+  by 90 degrees (clockwise).
+
+  You have to rotate the image in-place, which means you have to modify the
+  input 2D matrix directly. DO NOT allocate another 2D matrix and do the
+  rotation.
+
+function_name: "rotate"
+parameters:
+  - name: "matrix"
+    type: "[][]int"
+    description: "n × n 2D matrix to rotate in-place"
+return_type: "void"
+
+examples:
+  - input: |
+      matrix = [[1,2,3],[4,5,6],[7,8,9]]
+    output: "[[7,4,1],[8,5,2],[9,6,3]]"
+    explanation: "Rotate the 3×3 matrix 90 degrees clockwise."
+  - input: |
+      matrix = [[5,1,9,11],[2,4,8,10],[13,3,6,7],[15,14,12,16]]
+    output: "[[15,13,2,5],[14,3,4,1],[12,6,8,9],[16,7,10,11]]"
+    explanation: "Rotate the 4×4 matrix 90 degrees clockwise."
+
+hints:
+  - level: 1
+    title: "Layer by layer"
+    content: "Think about rotating the matrix one layer (ring) at a time, from the outermost layer inward."
+  - level: 2
+    title: "Four-way swap"
+    content: "Each element moves in a cycle of four positions. Rotate groups of four cells at a time: top → right → bottom → left → top."
+  - level: 3
+    title: "Transpose + reverse"
+    content: |
+      An easier approach:
+      1. Transpose the matrix (swap matrix[i][j] with matrix[j][i])
+      2. Reverse each row
+      This achieves a 90-degree clockwise rotation.
+
+template: |
+  func rotate(matrix [][]int) {
+      // Your code here
+      // Modify matrix in-place
+  }
+
+test_cases:
+  - params: [[[[1, 2, 3], [4, 5, 6], [7, 8, 9]]]]
+    expected: [[7, 4, 1], [8, 5, 2], [9, 6, 3]]
+    description: "3x3 matrix"
+  - params: [[[[5, 1, 9, 11], [2, 4, 8, 10], [13, 3, 6, 7], [15, 14, 12, 16]]]]
+    expected: [[15, 13, 2, 5], [14, 3, 4, 1], [12, 6, 8, 9], [16, 7, 10, 11]]
+    description: "4x4 matrix"
+  - params: [[[[1]]]]
+    expected: [[1]]
+    description: "1x1 matrix"
+  - params: [[[[1, 2], [3, 4]]]]
+    expected: [[3, 1], [4, 2]]
+    description: "2x2 matrix"
+
+constraints:
+  - "1 ≤ len(matrix) ≤ 20"
+  - "len(matrix[i]) == len(matrix)"
+  - "-1000 ≤ matrix[i][j] ≤ 1000"
+
+time_complexity_hint: "O(n²)"
+space_complexity_hint: "O(1)"
+
+solution:
+  code: |
+    func rotate(matrix [][]int) {
+        n := len(matrix)
+        // Transpose
+        for i := 0; i < n; i++ {
+            for j := i + 1; j < n; j++ {
+                matrix[i][j], matrix[j][i] = matrix[j][i], matrix[i][j]
+            }
+        }
+        // Reverse each row
+        for i := 0; i < n; i++ {
+            for j := 0; j < n/2; j++ {
+                matrix[i][j], matrix[i][n-1-j] = matrix[i][n-1-j], matrix[i][j]
+            }
+        }
+    }
+  approach: "Transpose matrix then reverse each row"
+  time_complexity: "O(n²)"
+  space_complexity: "O(1)"

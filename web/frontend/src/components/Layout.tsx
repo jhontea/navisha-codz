@@ -13,7 +13,6 @@ import {
   Sun,
   Moon,
   Activity,
-  PlusCircle,
 } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
 import { useTheme } from "../hooks/useTheme";
@@ -38,15 +37,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const { user, isAuthenticated, logout } = useAuthStore();
   const { theme, toggle: toggleTheme } = useTheme();
-  const [isMobile, setIsMobile] = useState(false);
-
-  // Detect mobile
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768);
-    check();
-    window.addEventListener("resize", check);
-    return () => window.removeEventListener("resize", check);
-  }, []);
 
   // Close sidebar on route change
   useEffect(() => {

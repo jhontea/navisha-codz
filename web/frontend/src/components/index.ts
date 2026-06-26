@@ -3,7 +3,6 @@ export { Button } from './ui/Button';
 export type { ButtonProps } from './ui/Button';
 export { Badge } from './ui/Badge';
 export type { BadgeProps, DifficultyLevel, BadgeSize } from './ui/Badge';
-type BadgeStatus = 'pending' | 'running' | 'accepted' | 'wrong_answer' | 'timeout' | 'compilation_error';
 export { Card, CardHeader, CardTitle, CardContent, CardFooter } from './ui/Card';
 export type { CardProps } from './ui/Card';
 export { Modal } from './ui/Modal';

@@ -117,6 +117,7 @@ func main() {
 	srv.router.Use(middleware.RequestIDMiddleware())
 	srv.router.Use(middleware.LoggerMiddleware())
 	srv.router.Use(middleware.CORSMiddleware())
+	srv.router.Use(middleware.RequestValidationMiddleware(middleware.DefaultRequestValidationConfig()))
 
 	srv.setupRoutes()
 
@@ -146,7 +147,7 @@ func (s *Server) healthCheck(c *gin.Context) {
 	dbStatus := "ok"
 
 	if err := s.db.HealthCheck(ctx); err != nil {
-		dbStatus = "error: " + err.Error()
+		dbStatus = "unavailable"
 		status = "degraded"
 	}
 
@@ -316,7 +317,16 @@ func (s *Server) reorderHints(hints []HintResponse, adaptive AdaptiveHintLevel, 
 // getHints handles GET /api/problems/:id/hints - returns hints with unlock status based on attempts.
 func (s *Server) getHints(c *gin.Context) {
 	ctx := c.Request.Context()
-	userID, _ := c.Get(middleware.ContextKeyUserID)
+	userIDRaw, exists := c.Get(middleware.ContextKeyUserID)
+	if !exists || userIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	userID, ok := userIDRaw.(string)
+	if !ok || userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
 
 	problemIDStr := c.Param("id")
 	problemID, err := strconv.Atoi(problemIDStr)
@@ -350,16 +360,16 @@ func (s *Server) getHints(c *gin.Context) {
 	defer rows.Close()
 
 	// Get user's used hints
-	usedHints, err := s.getUserUsedHints(ctx, userID.(string), problemID)
+	usedHints, err := s.getUserUsedHints(ctx, userID, problemID)
 	if err != nil {
 		log.Printf("Failed to get used hints: %v", err)
 	}
 
 	// Count failed attempts
-	failedAttempts := s.countFailedAttempts(ctx, userID.(string), problemID)
+	failedAttempts := s.countFailedAttempts(ctx, userID, problemID)
 
 	// Determine adaptive level
-	adaptive := s.determineAdaptiveLevel(ctx, userID.(string), problemID)
+	adaptive := s.determineAdaptiveLevel(ctx, userID, problemID)
 
 	var hints []HintResponse
 	for rows.Next() {
@@ -438,7 +448,16 @@ func (s *Server) getHints(c *gin.Context) {
 // useHint handles POST /api/problems/:id/hints/:hintId/use.
 func (s *Server) useHint(c *gin.Context) {
 	ctx := c.Request.Context()
-	userID, _ := c.Get(middleware.ContextKeyUserID)
+	userIDRaw, exists := c.Get(middleware.ContextKeyUserID)
+	if !exists || userIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	userID, ok := userIDRaw.(string)
+	if !ok || userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
 
 	problemIDStr := c.Param("id")
 	problemID, err := strconv.Atoi(problemIDStr)
@@ -467,7 +486,7 @@ func (s *Server) useHint(c *gin.Context) {
 	}
 
 	// Check if already used
-	alreadyUsed, err := s.isHintUsed(ctx, userID.(string), hintID)
+	alreadyUsed, err := s.isHintUsed(ctx, userID, hintID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 		return
@@ -478,15 +497,15 @@ func (s *Server) useHint(c *gin.Context) {
 	}
 
 	// Check if hint should be unlocked based on attempts threshold
-	failedAttempts := s.countFailedAttempts(ctx, userID.(string), problemID)
-	adaptive := s.determineAdaptiveLevel(ctx, userID.(string), problemID)
+	failedAttempts := s.countFailedAttempts(ctx, userID, problemID)
+	adaptive := s.determineAdaptiveLevel(ctx, userID, problemID)
 	threshold := getHintUnlockThresholds(hint.Level, adaptive)
 
 	if failedAttempts < threshold {
 		// Check if previous level hint was used (allow sequential unlock)
 		prevUsed := false
 		if hint.Level > 1 {
-			prevUsed, err = s.isPreviousLevelUsed(ctx, userID.(string), problemID, hint.Level)
+			prevUsed, err = s.isPreviousLevelUsed(ctx, userID, problemID, hint.Level)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 				return
@@ -516,7 +535,7 @@ func (s *Server) useHint(c *gin.Context) {
 	_, err = s.db.Exec(ctx, `
 		INSERT INTO hints_used (user_id, problem_id, hint_id)
 		VALUES ($1, $2, $3)
-	`, userID.(string), problemID, hintID)
+	`, userID, problemID, hintID)
 	if err != nil {
 		log.Printf("Failed to record hint usage: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to use hint"})
@@ -524,7 +543,7 @@ func (s *Server) useHint(c *gin.Context) {
 	}
 
 	// Calculate current total penalty for this problem
-	totalPenalty, err := s.calculateTotalPenalty(ctx, userID.(string), problemID)
+	totalPenalty, err := s.calculateTotalPenalty(ctx, userID, problemID)
 	if err != nil {
 		log.Printf("Failed to calculate penalty: %v", err)
 	}
@@ -536,7 +555,7 @@ func (s *Server) useHint(c *gin.Context) {
 		ON CONFLICT (user_id, problem_id) DO UPDATE SET
 			hints_used_count = user_problem_status.hints_used_count + 1,
 			attempts = COALESCE(user_problem_status.attempts, 0) + 1
-	`, userID.(string), problemID)
+	`, userID, problemID)
 	if err != nil {
 		log.Printf("Failed to update user problem status: %v", err)
 	}
@@ -643,7 +662,16 @@ func (s *Server) getHintAnalytics(c *gin.Context) {
 // getRecommendedHint handles GET /api/problems/:id/hints/recommended
 func (s *Server) getRecommendedHint(c *gin.Context) {
 	ctx := c.Request.Context()
-	userID, _ := c.Get(middleware.ContextKeyUserID)
+	userIDRaw, exists := c.Get(middleware.ContextKeyUserID)
+	if !exists || userIDRaw == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	userID, ok := userIDRaw.(string)
+	if !ok || userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
 
 	problemIDStr := c.Param("id")
 	problemID, err := strconv.Atoi(problemIDStr)
@@ -679,15 +707,15 @@ func (s *Server) getRecommendedHint(c *gin.Context) {
 	}
 
 	// Get used hints
-	usedHints, _ := s.getUserUsedHints(ctx, userID.(string), problemID)
+	usedHints, _ := s.getUserUsedHints(ctx, userID, problemID)
 	usedMap := make(map[int]bool)
 	for _, uh := range usedHints {
 		usedMap[uh.HintID] = true
 	}
 
 	// Count failed attempts
-	failedAttempts := s.countFailedAttempts(ctx, userID.(string), problemID)
-	adaptive := s.determineAdaptiveLevel(ctx, userID.(string), problemID)
+	failedAttempts := s.countFailedAttempts(ctx, userID, problemID)
+	adaptive := s.determineAdaptiveLevel(ctx, userID, problemID)
 
 	// Find the best hint to recommend
 	var recommended *Hint

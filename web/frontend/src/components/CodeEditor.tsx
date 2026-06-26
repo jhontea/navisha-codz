@@ -745,19 +745,9 @@ export const CodeEditor = memo(function CodeEditor({
             original={previousSubmission}
             modified={value}
             theme={resolvedMonacoTheme}
-            onMount={(_editor, monacoInstance) => {
-              defineCustomThemes(monacoInstance);
-            }},
-            options={{
-              ...editorOptions,
-              readOnly: true,
-              renderSideBySide: true,
-              originalEditable: false,
-            }}
-            loading={
-              <div className="flex items-center justify-center h-full bg-slate-900 text-slate-400">
-              </div>
-            }
+            onMount={(_editor: any, monacoInstance: any) => { defineCustomThemes(monacoInstance); }}
+            options={{ ...editorOptions, readOnly: true, renderSideBySide: true, originalEditable: false }}
+            loading={<div className="flex items-center justify-center h-full bg-slate-900 text-slate-400">Loading diff...</div>}
           />
         ) : (
           <Editor

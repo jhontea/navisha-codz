@@ -255,10 +255,16 @@ func generateBenchmarkHarness(b *strings.Builder, problem ProblemDefinition, cfg
 		funcName = "solution"
 	}
 
-	b.WriteString("func main() {\n")
-	b.WriteString("\tresults := make([]TestResult, 0, len(testCases))\n\n")
+	// Guard against zero iterations
+	iterations := cfg.BenchmarkIterations
+	if iterations < 1 {
+		iterations = 1
+	}
 
-	b.WriteString(fmt.Sprintf("\titerations := %d\n", cfg.BenchmarkIterations))
+	b.WriteString("func main() {\n")
+	b.WriteString("	results := make([]TestResult, 0, len(testCases))\n\n")
+
+	b.WriteString(fmt.Sprintf("	iterations := %d\n", iterations))
 	b.WriteString("\tfmt.Printf(\"Benchmark: %d iterations per test case\\n\", iterations)\n\n")
 
 	b.WriteString("\tfor _, tc := range testCases {\n")

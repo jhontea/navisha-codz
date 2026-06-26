@@ -10,8 +10,6 @@ import {
   Star,
   Gift,
   Users,
-  ChevronLeft,
-  ChevronRight,
 } from "lucide-react";
 import type { LeaderboardEntry, LeaderboardPeriod } from "../types";
 import { useAuthStore } from "../store/authStore";

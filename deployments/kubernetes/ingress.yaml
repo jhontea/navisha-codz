@@ -71,7 +71,7 @@ spec:
                 port:
                   number: 9104
           # Hint Service
-          - path: /api/hints
+          - path: /api/problems
             pathType: Prefix
             backend:
               service:

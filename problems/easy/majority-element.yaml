@@ -1,0 +1,97 @@
+id: "majority-element"
+title: "Majority Element"
+type: "function"
+difficulty: "easy"
+category: "array"
+tags: ["array", "hash-map", "sorting"]
+
+description: |
+  Given an array `nums` of size `n`, return the majority element.
+
+  The majority element is the element that appears more than `⌊n / 2⌋` times.
+  You may assume that the majority element always exists in the array.
+
+function_name: "majorityElement"
+parameters:
+  - name: "nums"
+    type: "[]int"
+    description: "Array of integers"
+return_type: "int"
+
+examples:
+  - input: "nums = [3,2,3]"
+    output: "3"
+    explanation: "3 appears 2 times (n=3, ⌊3/2⌋=1, so 2 > 1)."
+  - input: "nums = [2,2,1,1,1,2,2]"
+    output: "2"
+    explanation: "2 appears 4 times (n=7, ⌊7/2⌋=3, so 4 > 3)."
+
+hints:
+  - level: 1
+    title: "Frequency count"
+    content: "Count how many times each element appears. The one with count > n/2 is the answer."
+  - level: 2
+    title: "Boyer-Moore voting"
+    content: "Think about a cancelation approach. If you pair different elements together, the majority element will survive."
+  - level: 3
+    title: "Boyer-Moore algorithm"
+    content: |
+      Maintain a candidate and a count, both starting at 0.
+      For each num:
+      1. If count == 0, set candidate = num and count = 1
+      2. Else if num == candidate, increment count
+      3. Else decrement count
+      Return candidate at the end.
+
+template: |
+  func majorityElement(nums []int) int {
+      // Your code here
+      return 0
+  }
+
+test_cases:
+  - params: [[[3, 2, 3]]]
+    expected: 3
+    description: "Simple majority"
+  - params: [[[2, 2, 1, 1, 1, 2, 2]]]
+    expected: 2
+    description: "Majority in larger array"
+  - params: [[[1]]]
+    expected: 1
+    description: "Single element"
+  - params: [[[6, 5, 5]]]
+    expected: 5
+    description: "Three elements, majority at end"
+  - params: [[[-1, -1, -2]]]
+    expected: -1
+    description: "Negative numbers"
+
+constraints:
+  - "1 ≤ len(nums) ≤ 5 × 10⁴"
+  - "-10⁹ ≤ nums[i] ≤ 10⁹"
+  - "The majority element always exists."
+
+time_complexity_hint: "O(n)"
+space_complexity_hint: "O(1)"
+
+solution:
+  code: |
+    func majorityElement(nums []int) int {
+        candidate := nums[0]
+        count := 1
+        for i := 1; i < len(nums); i++ {
+            if nums[i] == candidate {
+                count++
+            } else {
+                count--
+                if count == 0 {
+                    candidate = nums[i]
+                    count = 1
+                }
+            }
+        }
+        return candidate
+    }
+  approach: "Boyer-Moore voting algorithm"
+  time_complexity: "O(n)"
+  space_complexity: "O(1)"

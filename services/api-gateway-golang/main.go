@@ -235,23 +235,33 @@ type SlidingWindowEntry struct {
 
 // SlidingWindowRateLimiter implements per-user and per-IP rate limiting.
 type SlidingWindowRateLimiter struct {
-	mu      sync.RWMutex
-	entries map[string]*SlidingWindowEntry
-	limit   int
-	window  time.Duration
-	cleanup time.Duration
+	mu        sync.RWMutex
+	entries   map[string]*SlidingWindowEntry
+	limit     int
+	window    time.Duration
+	cleanup   time.Duration
+	lastCount map[string]int // tracks last count for rate limit headers
+	lastCountMu sync.Mutex
+	done      chan struct{}
 }
 
 // NewSlidingWindowRateLimiter creates a new sliding window rate limiter.
 func NewSlidingWindowRateLimiter(limit int, window, cleanup time.Duration) *SlidingWindowRateLimiter {
 	rl := &SlidingWindowRateLimiter{
-		entries: make(map[string]*SlidingWindowEntry),
-		limit:   limit,
-		window:  window,
-		cleanup: cleanup,
+		entries:   make(map[string]*SlidingWindowEntry),
+		limit:     limit,
+		window:    window,
+		cleanup:   cleanup,
+		lastCount: make(map[string]int),
+		done:      make(chan struct{}),
 	}
 	go rl.backgroundCleanup()
 	return rl
+}
+
+// StopCleanup stops the background cleanup goroutine.
+func (rl *SlidingWindowRateLimiter) StopCleanup() {
+	close(rl.done)
 }
 
 // Allow checks if request is allowed for given key.
@@ -288,26 +298,67 @@ func (rl *SlidingWindowRateLimiter) Allow(key string) bool {
 	}
 
 	entry.timestamps = append(entry.timestamps, now)
+	
+	// Track current count for rate limit headers
+	rl.lastCountMu.Lock()
+	rl.lastCount[key] = len(entry.timestamps)
+	rl.lastCountMu.Unlock()
+	
 	return true
 }
 
+// GetRemaining returns the remaining requests for a given key within the current window.
+func (rl *SlidingWindowRateLimiter) GetRemaining(key string) int {
+	rl.lastCountMu.Lock()
+	defer rl.lastCountMu.Unlock()
+	count, exists := rl.lastCount[key]
+	if !exists {
+		return rl.limit
+	}
+	remaining := rl.limit - count
+	if remaining < 0 {
+		return 0
+	}
+	return remaining
+}
+
+// GetLimit returns the rate limit for this limiter.
+func (rl *SlidingWindowRateLimiter) GetLimit() int {
+	return rl.limit
+}
+
+// GetResetTime returns the Unix timestamp when the current rate limit window resets.
+func (rl *SlidingWindowRateLimiter) GetResetTime() int64 {
+	return time.Now().Add(rl.window).Unix()
+}
+
 func (rl *SlidingWindowRateLimiter) backgroundCleanup() {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[RECOVER] SlidingWindowRateLimiter cleanup panic: %v", r)
+		}
+	}()
 	ticker := time.NewTicker(rl.cleanup)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		now := time.Now().UnixNano()
-		cutoff := now - (rl.window * 2).Nanoseconds()
+	for {
+		select {
+		case <-rl.done:
+			return
+		case <-ticker.C:
+			now := time.Now().UnixNano()
+			cutoff := now - (rl.window * 2).Nanoseconds()
 
-		rl.mu.Lock()
-		for key, entry := range rl.entries {
-			entry.mu.Lock()
-			if len(entry.timestamps) == 0 || entry.timestamps[len(entry.timestamps)-1] < cutoff {
-				delete(rl.entries, key)
+			rl.mu.Lock()
+			for key, entry := range rl.entries {
+				entry.mu.Lock()
+				if len(entry.timestamps) == 0 || entry.timestamps[len(entry.timestamps)-1] < cutoff {
+					delete(rl.entries, key)
+				}
+				entry.mu.Unlock()
 			}
-			entry.mu.Unlock()
+			rl.mu.Unlock()
 		}
-		rl.mu.Unlock()
 	}
 }
 
@@ -807,7 +858,6 @@ func (gw *Gateway) setupServiceRoutes() {
 	gw.serviceRoutes["/api/problems"] = "problem-service"
 	gw.serviceRoutes["/api/submissions"] = "execution-service"
 	gw.serviceRoutes["/api/leaderboard"] = "leaderboard-service"
-	gw.serviceRoutes["/api/hints"] = "hint-service"
 	gw.serviceRoutes["/api/users"] = "auth-service"
 	gw.serviceRoutes["/api/admin"] = "problem-service"
 }
@@ -835,7 +885,9 @@ func (gw *Gateway) Setup() {
 	gw.router.Use(gw.loggerMiddleware())
 	gw.router.Use(gw.corsMiddleware())
 	gw.router.Use(gw.rateLimitMiddleware())
+	gw.router.Use(gw.timeoutMiddleware())
 	gw.router.Use(gw.requestValidationMiddleware())
+	gw.router.Use(middleware.GzipMiddleware())
 
 	// Health endpoints (no auth)
 	gw.router.GET("/health", gw.healthHandler())
@@ -871,7 +923,7 @@ func (gw *Gateway) Setup() {
 				protected.GET("/submissions/:id", gw.cacheMiddleware(), gw.proxyTo("execution-service", ""))
 				protected.GET("/submissions/user/:userId", gw.cacheMiddleware(), gw.proxyTo("execution-service", ""))
 				protected.GET("/leaderboard", gw.cacheMiddleware(), gw.proxyTo("leaderboard-service", ""))
-				protected.GET("/hints/:problemId", gw.cacheMiddleware(), gw.proxyTo("hint-service", ""))
+				protected.GET("/problems/:id/hints", gw.cacheMiddleware(), gw.proxyTo("hint-service", ""))
 				protected.GET("/users/me", gw.cacheMiddleware(), gw.proxyTo("auth-service", ""))
 			}
 
@@ -902,7 +954,7 @@ func (gw *Gateway) Setup() {
 			protected.GET("/submissions/:id", gw.cacheMiddleware(), gw.proxyTo("execution-service", ""))
 			protected.GET("/submissions/user/:userId", gw.cacheMiddleware(), gw.proxyTo("execution-service", ""))
 			protected.GET("/leaderboard", gw.cacheMiddleware(), gw.proxyTo("leaderboard-service", ""))
-			protected.GET("/hints/:problemId", gw.cacheMiddleware(), gw.proxyTo("hint-service", ""))
+			protected.GET("/problems/:id/hints", gw.cacheMiddleware(), gw.proxyTo("hint-service", ""))
 			protected.GET("/users/me", gw.cacheMiddleware(), gw.proxyTo("auth-service", ""))
 		}
 
@@ -1215,7 +1267,11 @@ func (gw *Gateway) rateLimitMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Rate limit by IP
 		ip := c.ClientIP()
-		if !gw.rateLimiter.Allow(fmt.Sprintf("ip:%s", ip)) {
+		ipKey := fmt.Sprintf("ip:%s", ip)
+		if !gw.rateLimiter.Allow(ipKey) {
+			c.Header("X-RateLimit-Limit", fmt.Sprintf("%d", gw.rateLimiter.GetLimit()))
+			c.Header("X-RateLimit-Remaining", fmt.Sprintf("%d", gw.rateLimiter.GetRemaining(ipKey)))
+			c.Header("X-RateLimit-Reset", fmt.Sprintf("%d", gw.rateLimiter.GetResetTime()))
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
 				"error":    "rate limit exceeded",
 				"code":     "RATE_LIMITED_IP",
@@ -1224,10 +1280,19 @@ func (gw *Gateway) rateLimitMiddleware() gin.HandlerFunc {
 			return
 		}
 
+		// Set global rate limit headers
+		c.Header("X-RateLimit-Limit", fmt.Sprintf("%d", gw.rateLimiter.GetLimit()))
+		c.Header("X-RateLimit-Remaining", fmt.Sprintf("%d", gw.rateLimiter.GetRemaining(ipKey)))
+		c.Header("X-RateLimit-Reset", fmt.Sprintf("%d", gw.rateLimiter.GetResetTime()))
+
 		// Rate limit by user if authenticated
 		if userID, exists := c.Get("userID"); exists {
 			userLimiter := NewSlidingWindowRateLimiter(gw.cfg.RateLimitPerUserMin, time.Minute, 5*time.Minute)
-			if !userLimiter.Allow(fmt.Sprintf("user:%v", userID)) {
+			userKey := fmt.Sprintf("user:%v", userID)
+			if !userLimiter.Allow(userKey) {
+				c.Header("X-RateLimit-Limit", fmt.Sprintf("%d", userLimiter.GetLimit()))
+				c.Header("X-RateLimit-Remaining", fmt.Sprintf("%d", userLimiter.GetRemaining(userKey)))
+				c.Header("X-RateLimit-Reset", fmt.Sprintf("%d", userLimiter.GetResetTime()))
 				c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
 					"error":    "rate limit exceeded",
 					"code":     "RATE_LIMITED_USER",
@@ -1242,7 +1307,11 @@ func (gw *Gateway) rateLimitMiddleware() gin.HandlerFunc {
 		for group, limit := range gw.endpointRateLimits {
 			if strings.Contains(path, group) {
 				epLimiter := NewSlidingWindowRateLimiter(limit, time.Minute, 5*time.Minute)
-				if !epLimiter.Allow(fmt.Sprintf("endpoint:%s:%s", group, ip)) {
+				epKey := fmt.Sprintf("endpoint:%s:%s", group, ip)
+				if !epLimiter.Allow(epKey) {
+					c.Header("X-RateLimit-Limit", fmt.Sprintf("%d", epLimiter.GetLimit()))
+					c.Header("X-RateLimit-Remaining", fmt.Sprintf("%d", epLimiter.GetRemaining(epKey)))
+					c.Header("X-RateLimit-Reset", fmt.Sprintf("%d", epLimiter.GetResetTime()))
 					c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
 						"error":    "endpoint rate limit exceeded",
 						"code":     "RATE_LIMITED_ENDPOINT",
@@ -1274,8 +1343,8 @@ func (gw *Gateway) requestValidationMiddleware() gin.HandlerFunc {
 			}
 		}
 
-		// Limit body size to 10MB
-		if c.Request.ContentLength > 10*1024*1024 {
+		// Limit body size to 1MB
+		if c.Request.ContentLength > 1*1024*1024 {
 			c.AbortWithStatusJSON(http.StatusRequestEntityTooLarge, gin.H{
 				"error":    "request body too large",
 				"code":     "BODY_TOO_LARGE",
@@ -1285,6 +1354,25 @@ func (gw *Gateway) requestValidationMiddleware() gin.HandlerFunc {
 		}
 
 		c.Next()
+	}
+}
+
+// timeoutMiddleware adds a 30-second request timeout via context.
+func (gw *Gateway) timeoutMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
+		defer cancel()
+		c.Request = c.Request.WithContext(ctx)
+		c.Next()
+
+		// If the context timed out but no response written yet, send a timeout error
+		if ctx.Err() == context.DeadlineExceeded && !c.Writer.Written() {
+			c.AbortWithStatusJSON(http.StatusGatewayTimeout, gin.H{
+				"error":    "request timeout",
+				"code":     "TIMEOUT",
+				"trace_id": c.GetString("traceID"),
+			})
+		}
 	}
 }
 

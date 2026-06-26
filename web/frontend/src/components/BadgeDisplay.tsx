@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import type { Badge, Achievement } from "../types";
 import { Share2, Lock, CheckCircle, TrendingUp } from "lucide-react";
 

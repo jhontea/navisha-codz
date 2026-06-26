@@ -50,10 +50,13 @@ type JWTClaims struct {
 }
 
 // NewJWTConfig creates JWT config from environment variables.
+// Panics if JWT_ACCESS_SECRET or JWT_REFRESH_SECRET are not set.
 func NewJWTConfig() JWTConfig {
+	accessSecret := getEnvOrPanic("JWT_ACCESS_SECRET")
+	refreshSecret := getEnvOrPanic("JWT_REFRESH_SECRET")
 	return JWTConfig{
-		AccessTokenSecret:    getEnv("JWT_ACCESS_SECRET", "your-access-secret-key-change-in-production"),
-		RefreshTokenSecret:   getEnv("JWT_REFRESH_SECRET", "your-refresh-secret-key-change-in-production"),
+		AccessTokenSecret:    accessSecret,
+		RefreshTokenSecret:   refreshSecret,
 		AccessTokenTTL:       time.Duration(getEnvInt("JWT_ACCESS_TTL_MIN", 15)) * time.Minute,
 		RefreshTokenTTL:      time.Duration(getEnvInt("JWT_REFRESH_TTL_HOURS", 168)) * time.Hour,
 		Issuer:               getEnv("JWT_ISSUER", "coding-challange"),
@@ -267,8 +270,33 @@ func (sm *SessionManager) CreateSession(userID, username, role, ip, userAgent, r
 			oldest.Active = false
 		}
 		sm.userSessions[userID] = sm.userSessions[userID][1:]
-		_ = oldestID
 	}
+
+	return session
+}
+
+// CreateSessionWithID creates a session with a specific ID (used for testing).
+func (sm *SessionManager) CreateSessionWithID(sessionID, userID, username, role, ip, userAgent, refreshToken string, ttl time.Duration) *Session {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	now := time.Now()
+	session := &Session{
+		ID:           sessionID,
+		UserID:       userID,
+		Username:     username,
+		Role:         role,
+		IP:           ip,
+		UserAgent:    userAgent,
+		CreatedAt:    now,
+		LastActiveAt: now,
+		ExpiresAt:    now.Add(ttl),
+		RefreshToken: refreshToken,
+		Active:       true,
+	}
+
+	sm.sessions[sessionID] = session
+	sm.userSessions[userID] = append(sm.userSessions[userID], sessionID)
 
 	return session
 }
@@ -376,6 +404,18 @@ func (sm *SessionManager) cleanup() {
 		for id, session := range sm.sessions {
 			if !session.Active || now.After(session.ExpiresAt) {
 				delete(sm.sessions, id)
+				// Also remove from userSessions index
+				if userSessions, ok := sm.userSessions[session.UserID]; ok {
+					for i, sid := range userSessions {
+						if sid == id {
+							sm.userSessions[session.UserID] = append(userSessions[:i], userSessions[i+1:]...)
+							break
+						}
+					}
+					if len(sm.userSessions[session.UserID]) == 0 {
+						delete(sm.userSessions, session.UserID)
+					}
+				}
 			}
 		}
 		sm.mu.Unlock()
@@ -553,7 +593,7 @@ func AuthMiddleware(cfg JWTConfig, blacklist *TokenBlacklist, sessionManager *Se
 		blacklist = &TokenBlacklist{}
 	}
 	if sessionManager == nil {
-		sessionManager = &SessionManager{}
+		// Session checking disabled
 	}
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
@@ -653,103 +693,12 @@ func RoleMiddleware(allowedRoles ...string) gin.HandlerFunc {
 	}
 }
 
-// RateLimiter implements a simple in-memory rate limiter.
-type RateLimiter struct {
-	mu       sync.RWMutex
-	visitors map[string]*visitor
-	limit    int
-	window   time.Duration
-}
-
-type visitor struct {
-	count    int
-	lastSeen time.Time
-}
-
-// NewRateLimiter creates a new rate limiter.
-func NewRateLimiter(requests int, window time.Duration) *RateLimiter {
-	rl := &RateLimiter{
-		visitors: make(map[string]*visitor),
-		limit:    requests,
-		window:   window,
-	}
-
-	go rl.cleanup()
-
-	return rl
-}
-
-// RateLimitMiddleware creates a Gin middleware for rate limiting.
-func (rl *RateLimiter) RateLimitMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		key := c.ClientIP()
-		if userID, exists := c.Get(ContextKeyUserID); exists {
-			key = userID.(string)
-		}
-
-		key = fmt.Sprintf("%s:%s", key, c.FullPath())
-
-		rl.mu.Lock()
-		v, exists := rl.visitors[key]
-		now := time.Now()
-
-		if !exists || now.Sub(v.lastSeen) > rl.window {
-			rl.visitors[key] = &visitor{count: 1, lastSeen: now}
-			rl.mu.Unlock()
-			c.Next()
-			return
-		}
-
-		v.count++
-		v.lastSeen = now
-		rl.mu.Unlock()
-
-		if v.count > rl.limit {
-			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-				"error":       "rate limit exceeded",
-				"retry_after": rl.window.Seconds(),
-			})
-			return
-		}
-
-		c.Next()
-	}
-}
-
-// cleanup removes expired entries from the rate limiter.
-func (rl *RateLimiter) cleanup() {
-	ticker := time.NewTicker(rl.window)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		rl.mu.Lock()
-		now := time.Now()
-		for key, v := range rl.visitors {
-			if now.Sub(v.lastSeen) > rl.window {
-				delete(rl.visitors, key)
-			}
-		}
-		rl.mu.Unlock()
-	}
-}
-
 // RequestIDMiddleware adds a unique request ID to each request.
 func RequestIDMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		requestID := generateRequestID()
 		c.Set("requestID", requestID)
 		c.Header("X-Request-ID", requestID)
-		c.Next()
-	}
-}
-
-// SecurityHeadersMiddleware adds security headers to responses.
-func SecurityHeadersMiddleware() gin.HandlerFunc {
-	headers := security.XSSHeaders()
-	return func(c *gin.Context) {
-		for key, value := range headers {
-			c.Header(key, value)
-		}
 		c.Next()
 	}
 }
@@ -837,11 +786,25 @@ func LoggerMiddleware() gin.HandlerFunc {
 	}
 }
 
-// CORSMiddleware handles CORS headers.
+// CORSMiddleware handles CORS headers using ALLOWED_ORIGINS env var.
+// If ALLOWED_ORIGINS is empty, requests with credentials are not allowed.
 func CORSMiddleware() gin.HandlerFunc {
+	allowedOrigins := getEnv("ALLOWED_ORIGINS", "")
+	originMap := make(map[string]bool)
+	if allowedOrigins != "" {
+		for _, o := range strings.Split(allowedOrigins, ",") {
+			originMap[strings.TrimSpace(o)] = true
+		}
+	}
 	return func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		origin := c.Request.Header.Get("Origin")
+		if originMap[origin] {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+			c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		} else if len(originMap) == 0 && origin == "" {
+			// No specific origins configured and no origin header — allow all origins
+			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		}
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE, PATCH")
 		c.Writer.Header().Set("Access-Control-Max-Age", "86400")
@@ -939,99 +902,6 @@ func (rts *RefreshTokenStore) RevokeAllUserTokens(userID string) {
 }
 
 // ============================================================================
-// Endpoint Rate Limiting
-// ============================================================================
-
-// EndpointRateLimiter provides rate limiting per endpoint group.
-type EndpointRateLimiter struct {
-	mu       sync.RWMutex
-	limits   map[string]int          // endpoint group -> requests per window
-	windows  map[string]time.Duration // endpoint group -> window duration
-	visitors map[string]*endpointVisitor
-}
-
-type endpointVisitor struct {
-	count    int
-	lastSeen time.Time
-}
-
-// NewEndpointRateLimiter creates a new endpoint rate limiter.
-func NewEndpointRateLimiter() *EndpointRateLimiter {
-	rl := &EndpointRateLimiter{
-		limits:   make(map[string]int),
-		windows:  make(map[string]time.Duration),
-		visitors: make(map[string]*endpointVisitor),
-	}
-	go rl.cleanup()
-	return rl
-}
-
-// SetLimit sets the rate limit for an endpoint group.
-func (erl *EndpointRateLimiter) SetLimit(group string, requests int, window time.Duration) {
-	erl.mu.Lock()
-	defer erl.mu.Unlock()
-	erl.limits[group] = requests
-	erl.windows[group] = window
-}
-
-// Allow checks if a request is allowed for the given endpoint group and key.
-func (erl *EndpointRateLimiter) Allow(group, key string) bool {
-	erl.mu.RLock()
-	limit, hasLimit := erl.limits[group]
-	window, hasWindow := erl.windows[group]
-	erl.mu.RUnlock()
-
-	if !hasLimit || !hasWindow {
-		return true // No limit configured
-	}
-
-	visitorKey := fmt.Sprintf("%s:%s", group, key)
-
-	erl.mu.Lock()
-	defer erl.mu.Unlock()
-
-	v, exists := erl.visitors[visitorKey]
-	now := time.Now()
-
-	if !exists || now.Sub(v.lastSeen) > window {
-		erl.visitors[visitorKey] = &endpointVisitor{count: 1, lastSeen: now}
-		return true
-	}
-
-	v.count++
-	v.lastSeen = now
-
-	if v.count > limit {
-		return false
-	}
-
-	return true
-}
-
-func (erl *EndpointRateLimiter) cleanup() {
-	ticker := time.NewTicker(5 * time.Minute)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		erl.mu.Lock()
-		now := time.Now()
-		for key, v := range erl.visitors {
-			// Create a max window check
-			var maxWindow time.Duration
-			for _, w := range erl.windows {
-				if w > maxWindow {
-					maxWindow = w
-				}
-			}
-			if now.Sub(v.lastSeen) > maxWindow*2 {
-				delete(erl.visitors, key)
-			}
-		}
-		erl.mu.Unlock()
-	}
-}
-
-// ============================================================================
 // Request Validation Middleware
 // ============================================================================
 
@@ -1044,7 +914,7 @@ type RequestValidationConfig struct {
 // DefaultRequestValidationConfig returns the default validation config.
 func DefaultRequestValidationConfig() RequestValidationConfig {
 	return RequestValidationConfig{
-		MaxBodySize: 10 * 1024 * 1024, // 10MB
+		MaxBodySize: 1 * 1024 * 1024, // 1MB
 		AllowedContentTypes: []string{
 			"application/json",
 			"application/x-www-form-urlencoded",
@@ -1110,6 +980,14 @@ func DeviceFingerprint(c *gin.Context) string {
 		}
 	}
 	return fp
+}
+
+// getEnvOrPanic returns the value of an environment variable or panics if unset.
+func getEnvOrPanic(key string) string {
+	if v, ok := os.LookupEnv(key); ok && v != "" {
+		return v
+	}
+	panic(fmt.Sprintf("required environment variable %q is not set", key))
 }
 
 func getEnv(key, fallback string) string {

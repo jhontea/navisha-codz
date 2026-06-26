@@ -117,6 +117,7 @@ func main() {
 	srv.router.Use(middleware.RequestIDMiddleware())
 	srv.router.Use(middleware.LoggerMiddleware())
 	srv.router.Use(middleware.CORSMiddleware())
+	srv.router.Use(middleware.RequestValidationMiddleware(middleware.DefaultRequestValidationConfig()))
 
 	// Register routes
 	srv.setupRoutes()
@@ -154,7 +155,7 @@ func (s *Server) healthCheck(c *gin.Context) {
 	dbStatus := "ok"
 
 	if err := s.db.HealthCheck(ctx); err != nil {
-		dbStatus = "error: " + err.Error()
+		dbStatus = "unavailable"
 		status = "degraded"
 	}
 
@@ -175,7 +176,7 @@ func (s *Server) register(c *gin.Context) {
 
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request", "details": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request format"})
 		return
 	}
 
@@ -261,7 +262,7 @@ func (s *Server) login(c *gin.Context) {
 
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request", "details": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request format"})
 		return
 	}
 
@@ -385,7 +386,12 @@ func (s *Server) refreshToken(c *gin.Context) {
 
 // logout handles POST /auth/logout.
 func (s *Server) logout(c *gin.Context) {
-	userID, _ := c.Get(middleware.ContextKeyUserID)
+	userIDRaw, _ := c.Get(middleware.ContextKeyUserID)
+	userID, ok := userIDRaw.(string)
+	if !ok || userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
 
 	// Revoke all refresh tokens for user
 	_, err := s.db.Exec(c.Request.Context(),
@@ -397,12 +403,15 @@ func (s *Server) logout(c *gin.Context) {
 
 	// Blacklist current access token in Redis
 	if s.redis != nil {
-		token, _ := c.Get(middleware.ContextKeyToken)
-		_ = s.redis.Set(c.Request.Context(),
-			fmt.Sprintf("blacklist:%s", token),
-			"revoked",
-			s.jwtConfig.AccessTokenTTL,
-		)
+		tokenRaw, _ := c.Get(middleware.ContextKeyToken)
+		token, ok := tokenRaw.(string)
+		if ok && token != "" {
+			_ = s.redis.Set(c.Request.Context(),
+				fmt.Sprintf("blacklist:%s", token),
+				"revoked",
+				s.jwtConfig.AccessTokenTTL,
+			)
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "logged out successfully"})
@@ -410,7 +419,12 @@ func (s *Server) logout(c *gin.Context) {
 
 // getCurrentUser handles GET /auth/me.
 func (s *Server) getCurrentUser(c *gin.Context) {
-	userID, _ := c.Get(middleware.ContextKeyUserID)
+	userIDRaw, _ := c.Get(middleware.ContextKeyUserID)
+	userID, ok := userIDRaw.(string)
+	if !ok || userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
 
 	var user UserInfo
 	err := s.db.QueryRow(c.Request.Context(),

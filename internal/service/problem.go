@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"strings"
 
 	"coding-challange/internal/model"
 	"coding-challange/internal/repository"
@@ -18,9 +19,9 @@ func NewProblemService(repo *repository.ProblemRepository) *ProblemService {
 }
 
 // ListProblems returns a summary list of all problems (without solutions).
-// Supports filtering by difficulty and category.
-func (s *ProblemService) ListProblems(difficulty, category string) []model.ProblemSummary {
-	problems := s.repo.GetAll(difficulty, category)
+// Supports filtering by difficulty, category, and tags.
+func (s *ProblemService) ListProblems(difficulty, category string, tags []string) []model.ProblemSummary {
+	problems := s.repo.GetAll(difficulty, category, tags)
 	summaries := make([]model.ProblemSummary, 0, len(problems))
 
 	for _, p := range problems {
@@ -132,15 +133,5 @@ func (s *ProblemService) ValidateCode(code string, problemID string) *model.Vali
 
 // containsFunction checks if the code contains a function declaration.
 func containsFunction(code, funcDecl string) bool {
-	return len(code) > 0 && len(funcDecl) > 0 && contains(code, funcDecl)
-}
-
-// contains is a simple string containment check.
-func contains(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
+	return len(code) > 0 && len(funcDecl) > 0 && strings.Contains(code, funcDecl)
 }

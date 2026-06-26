@@ -1,0 +1,442 @@
+basePath: /
+definitions:
+  coding-challange_internal_model.APIErrorDetail:
+    properties:
+      code:
+        type: integer
+      details:
+        items:
+          $ref: '#/definitions/coding-challange_internal_model.ErrorDetail'
+        type: array
+      message:
+        type: string
+      type:
+        type: string
+    type: object
+  coding-challange_internal_model.APIErrorResponse:
+    properties:
+      error:
+        $ref: '#/definitions/coding-challange_internal_model.APIErrorDetail'
+      meta:
+        $ref: '#/definitions/coding-challange_internal_model.Meta'
+    type: object
+  coding-challange_internal_model.APIResponse:
+    properties:
+      data: {}
+      meta:
+        $ref: '#/definitions/coding-challange_internal_model.Meta'
+    type: object
+  coding-challange_internal_model.ErrorDetail:
+    properties:
+      field:
+        type: string
+      issue:
+        type: string
+    type: object
+  coding-challange_internal_model.Example:
+    properties:
+      explanation:
+        type: string
+      input:
+        type: string
+      output:
+        type: string
+    type: object
+  coding-challange_internal_model.Hint:
+    properties:
+      content:
+        type: string
+      level:
+        type: integer
+      title:
+        type: string
+    type: object
+  coding-challange_internal_model.Meta:
+    properties:
+      request_id:
+        type: string
+      timestamp:
+        type: string
+    type: object
+  coding-challange_internal_model.Parameter:
+    properties:
+      description:
+        type: string
+      name:
+        type: string
+      type:
+        type: string
+    type: object
+  coding-challange_internal_model.Problem:
+    properties:
+      category:
+        type: string
+      constraints:
+        items:
+          type: string
+        type: array
+      description:
+        type: string
+      difficulty:
+        type: string
+      examples:
+        items:
+          $ref: '#/definitions/coding-challange_internal_model.Example'
+        type: array
+      function_name:
+        type: string
+      hints:
+        items:
+          $ref: '#/definitions/coding-challange_internal_model.Hint'
+        type: array
+      id:
+        type: string
+      parameters:
+        items:
+          $ref: '#/definitions/coding-challange_internal_model.Parameter'
+        type: array
+      return_type:
+        type: string
+      space_complexity_hint:
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      template:
+        type: string
+      test_cases:
+        items:
+          $ref: '#/definitions/coding-challange_internal_model.TestCase'
+        type: array
+      time_complexity_hint:
+        type: string
+      title:
+        type: string
+      type:
+        $ref: '#/definitions/coding-challange_internal_model.ProblemType'
+    type: object
+  coding-challange_internal_model.ProblemSummary:
+    properties:
+      category:
+        type: string
+      difficulty:
+        type: string
+      id:
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      title:
+        type: string
+      type:
+        type: string
+    type: object
+  coding-challange_internal_model.ProblemType:
+    enum:
+    - function
+    - main
+    type: string
+    x-enum-varnames:
+    - ProblemTypeFunction
+    - ProblemTypeMain
+  coding-challange_internal_model.TestCase:
+    properties:
+      description:
+        type: string
+      expected: {}
+      input:
+        type: string
+      params:
+        items: {}
+        type: array
+    type: object
+  coding-challange_internal_model.ValidationError:
+    properties:
+      column:
+        type: integer
+      line:
+        type: integer
+      message:
+        type: string
+      severity:
+        description: '"error" or "warning"'
+        type: string
+    type: object
+  coding-challange_internal_model.ValidationResult:
+    properties:
+      errors:
+        items:
+          $ref: '#/definitions/coding-challange_internal_model.ValidationError'
+        type: array
+      valid:
+        type: boolean
+      warnings:
+        items:
+          $ref: '#/definitions/coding-challange_internal_model.ValidationError'
+        type: array
+    type: object
+  internal_handler.ValidateCodeRequest:
+    properties:
+      code:
+        type: string
+      problem_id:
+        type: string
+    required:
+    - code
+    type: object
+host: localhost:9100
+info:
+  contact:
+    email: support@example.com
+    name: API Support
+    url: https://example.com/support
+  description: API for the Coding Challenge platform — list problems, get details,
+    validate code, and retrieve hints.
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: https://example.com/terms
+  title: Coding Challenge API
+  version: 1.1.0
+paths:
+  /api/problems:
+    get:
+      consumes:
+      - application/json
+      description: Get a paginated list of coding challenge problems with optional
+        filters
+      parameters:
+      - description: Filter by difficulty (easy, medium, hard)
+        in: query
+        name: difficulty
+        type: string
+      - description: Filter by category (e.g. array, string)
+        in: query
+        name: category
+        type: string
+      - description: Filter by type (function, main)
+        in: query
+        name: type
+        type: string
+      - description: Filter by tags (comma-separated)
+        in: query
+        name: tags
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/coding-challange_internal_model.APIResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/coding-challange_internal_model.ProblemSummary'
+                  type: array
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/coding-challange_internal_model.APIErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/coding-challange_internal_model.APIErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/coding-challange_internal_model.APIErrorResponse'
+      summary: List all problems
+      tags:
+      - problems
+  /api/problems/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Get full details of a specific coding challenge problem by its
+        ID
+      parameters:
+      - description: Problem ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/coding-challange_internal_model.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/coding-challange_internal_model.Problem'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/coding-challange_internal_model.APIErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/coding-challange_internal_model.APIErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/coding-challange_internal_model.APIErrorResponse'
+      summary: Get a problem by ID
+      tags:
+      - problems
+  /api/problems/{id}/hints:
+    get:
+      consumes:
+      - application/json
+      description: Get progressive hints to help solve a specific coding challenge
+        problem
+      parameters:
+      - description: Problem ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/coding-challange_internal_model.APIResponse'
+            - properties:
+                data:
+                  additionalProperties:
+                    items:
+                      $ref: '#/definitions/coding-challange_internal_model.Hint'
+                    type: array
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/coding-challange_internal_model.APIErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/coding-challange_internal_model.APIErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/coding-challange_internal_model.APIErrorResponse'
+      summary: Get hints for a problem
+      tags:
+      - problems
+  /api/problems/{id}/template:
+    get:
+      consumes:
+      - application/json
+      description: Get the template/starter code for a specific problem
+      parameters:
+      - description: Problem ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/coding-challange_internal_model.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/coding-challange_internal_model.Problem'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/coding-challange_internal_model.APIErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/coding-challange_internal_model.APIErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/coding-challange_internal_model.APIErrorResponse'
+      summary: Get problem template code
+      tags:
+      - problems
+  /api/validate:
+    post:
+      consumes:
+      - application/json
+      description: Validate the syntax of submitted code for a problem
+      parameters:
+      - description: Code to validate
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handler.ValidateCodeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/coding-challange_internal_model.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/coding-challange_internal_model.ValidationResult'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/coding-challange_internal_model.APIErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/coding-challange_internal_model.APIErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/coding-challange_internal_model.APIErrorResponse'
+      summary: Validate code syntax
+      tags:
+      - problems
+  /health:
+    get:
+      consumes:
+      - application/json
+      description: Check the health status of the API service
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/coding-challange_internal_model.APIResponse'
+            - properties:
+                data:
+                  type: object
+              type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/coding-challange_internal_model.APIErrorResponse'
+      summary: Health check
+      tags:
+      - system
+schemes:
+- http
+- https
+swagger: "2.0"

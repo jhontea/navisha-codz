@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect, memo } from "react";
 import { Link } from "react-router-dom";
-import { Search, Filter, CheckCircle, Circle, Clock, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Filter, ArrowUpDown, CheckCircle, Circle, Clock, ChevronLeft, ChevronRight } from "lucide-react";
 import type { Difficulty, Category, Problem } from "../types";
 
 interface ProblemListProps {
@@ -15,6 +15,20 @@ const difficultyConfig: Record<Difficulty, { label: string; color: string }> = {
   easy: { label: "Easy", color: "bg-green-100 text-green-700" },
   medium: { label: "Medium", color: "bg-yellow-100 text-yellow-700" },
   hard: { label: "Hard", color: "bg-red-100 text-red-700" },
+};
+
+const sortOptions = [
+  { value: "", label: "Default" },
+  { value: "difficulty-asc", label: "Difficulty (Easy First)" },
+  { value: "difficulty-desc", label: "Difficulty (Hard First)" },
+  { value: "title-asc", label: "Title (A-Z)" },
+  { value: "title-desc", label: "Title (Z-A)" },
+] as const;
+
+const difficultyRank: Record<Difficulty, number> = {
+  easy: 1,
+  medium: 2,
+  hard: 3,
 };
 
 const categories: Category[] = [
@@ -55,7 +69,7 @@ const ProblemCard = memo(function ProblemCard({ problem }: { problem: Problem })
             <StatusIcon problem={problem} />
           </div>
           <div>
-            <h3 className="font-semibold text-slate-900 dark:text-white">{problem.title}</h3>
+            <h3 className="font-semibold text-slate-900 dark:text-white truncate">{problem.title}</h3>
             <div className="flex flex-wrap items-center gap-2 mt-1.5">
               <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${diff.color}`}>
                 {diff.label}
@@ -143,7 +157,7 @@ function VirtualizedProblemList({
     >
       <div style={{ height: totalHeight, position: "relative" }}>
         <div style={{ position: "absolute", top: offsetY, left: 0, right: 0 }}>
-          {visibleProblems.map(({ problem, index }) => (
+          {visibleProblems.map(({ problem }) => (
             <div key={problem.id} style={{ height: itemHeight }}>
               <ProblemCard problem={problem} />
             </div>
@@ -158,10 +172,11 @@ export function ProblemList({ problems, total, page, pageSize, onPageChange }: P
   const [search, setSearch] = useState("");
   const [difficulty, setDifficulty] = useState<Difficulty | "">("");
   const [category, setCategory] = useState<Category | "">("");
+  const [sortBy, setSortBy] = useState<string>("");
 
-  // Memoized filtered problems
+  // Memoized filtered + sorted problems
   const filteredProblems = useMemo(() => {
-    return problems.filter((p) => {
+    let result = problems.filter((p) => {
       const matchesSearch =
         !search ||
         p.title.toLowerCase().includes(search.toLowerCase()) ||
@@ -170,7 +185,27 @@ export function ProblemList({ problems, total, page, pageSize, onPageChange }: P
       const matchesCategory = !category || p.category === category;
       return matchesSearch && matchesDifficulty && matchesCategory;
     });
-  }, [problems, search, difficulty, category]);
+
+    // Apply sorting
+    if (sortBy) {
+      result = [...result].sort((a, b) => {
+        switch (sortBy) {
+          case "difficulty-asc":
+            return difficultyRank[a.difficulty] - difficultyRank[b.difficulty];
+          case "difficulty-desc":
+            return difficultyRank[b.difficulty] - difficultyRank[a.difficulty];
+          case "title-asc":
+            return a.title.localeCompare(b.title);
+          case "title-desc":
+            return b.title.localeCompare(a.title);
+          default:
+            return 0;
+        }
+      });
+    }
+
+    return result;
+  }, [problems, search, difficulty, category, sortBy]);
 
   const totalPages = Math.ceil(total / pageSize);
 
@@ -185,6 +220,10 @@ export function ProblemList({ problems, total, page, pageSize, onPageChange }: P
 
   const handleCategoryChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
     setCategory(e.target.value as Category | "");
+  }, []);
+
+  const handleSortChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSortBy(e.target.value);
   }, []);
 
   const handlePrevPage = useCallback(() => {
@@ -246,6 +285,24 @@ export function ProblemList({ problems, total, page, pageSize, onPageChange }: P
               </option>
             ))}
           </select>
+
+          {/* Sort */}
+          <div className="relative">
+            <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <select
+              value={sortBy}
+              onChange={handleSortChange}
+              className="pl-10 pr-8 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm appearance-none bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              aria-label="Sort problems"
+              style={{ minHeight: "44px" }}
+            >
+              {sortOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 

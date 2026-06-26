@@ -1,0 +1,117 @@
+id: "n-queens"
+title: "N-Queens"
+type: "function"
+difficulty: "hard"
+category: "matrix"
+tags: ["backtracking", "recursion", "matrix"]
+
+description: |
+  The n-queens puzzle is the problem of placing `n` queens on an `n × n`
+  chessboard such that no two queens attack each other.
+
+  Given an integer `n`, return all distinct solutions to the n-queens puzzle.
+  You may return the answer in any order.
+
+  Each solution contains a distinct board configuration of the n-queens'
+  placement, where `'Q'` and `'.'` indicate a queen and an empty space,
+  respectively.
+
+function_name: "solveNQueens"
+parameters:
+  - name: "n"
+    type: "int"
+    description: "Size of the chessboard (n × n)"
+return_type: "[][]string"
+
+examples:
+  - input: "n = 4"
+    output: '[[".Q..","...Q","Q...","..Q."],["..Q.","Q...","...Q",".Q.."]]'
+    explanation: "There are two distinct solutions for the 4-queens puzzle."
+  - input: "n = 1"
+    output: '[["Q"]]'
+    explanation: "Only one solution for a 1×1 board."
+
+hints:
+  - level: 1
+    title: "Backtracking with constraints"
+    content: "Place queens row by row. For each row, try each column where a queen can be placed without being attacked."
+  - level: 2
+    title: "Track occupied columns and diagonals"
+    content: "Use sets to track which columns and diagonals are already occupied. A cell (r,c) is on diagonal (r-c) and anti-diagonal (r+c)."
+  - level: 3
+    title: "Board construction"
+    content: |
+      Recursive approach:
+      1. Start with row 0, maintain colSet, diagSet, antiDiagSet
+      2. For each col, check if col, (row-col), (row+col) are available
+      3. If yes, place 'Q', add to sets, recurse to next row
+      4. On backtrack, remove from sets and set cell back to '.'
+      5. When row == n, add a copy of the current board to result
+
+template: |
+  func solveNQueens(n int) [][]string {
+      // Your code here
+      return nil
+  }
+
+test_cases:
+  - params: [[4]]
+    expected: [[".Q..","...Q","Q...","..Q."],["..Q.","Q...","...Q",".Q.."]]
+    description: "4-queens has 2 solutions"
+  - params: [[1]]
+    expected: [["Q"]]
+    description: "1-queens has 1 solution"
+
+constraints:
+  - "1 ≤ n ≤ 9"
+
+time_complexity_hint: "O(n!)"
+space_complexity_hint: "O(n²)"
+
+solution:
+  code: |
+    func solveNQueens(n int) [][]string {
+        result := [][]string{}
+        board := make([][]byte, n)
+        for i := range board {
+            board[i] = make([]byte, n)
+            for j := range board[i] {
+                board[i][j] = '.'
+            }
+        }
+
+        cols := make(map[int]bool)
+        diag := make(map[int]bool)
+        antiDiag := make(map[int]bool)
+
+        var backtrack func(row int)
+        backtrack = func(row int) {
+            if row == n {
+                sol := make([]string, n)
+                for i := range board {
+                    sol[i] = string(board[i])
+                }
+                result = append(result, sol)
+                return
+            }
+            for col := 0; col < n; col++ {
+                d, ad := row-col, row+col
+                if cols[col] || diag[d] || antiDiag[ad] {
+                    continue
+                }
+                board[row][col] = 'Q'
+                cols[col], diag[d], antiDiag[ad] = true, true, true
+                backtrack(row + 1)
+                board[row][col] = '.'
+                delete(cols, col)
+                delete(diag, d)
+                delete(antiDiag, ad)
+            }
+        }
+
+        backtrack(0)
+        return result
+    }
+  approach: "Backtracking with column and diagonal tracking"
+  time_complexity: "O(n!)"
+  space_complexity: "O(n²)"

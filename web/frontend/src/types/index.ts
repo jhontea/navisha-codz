@@ -14,6 +14,7 @@ export interface User {
   achievements?: Achievement[];
   created_at: string;
   updated_at: string;
+  user?: any;
 }
 
 /** Badge model */
@@ -207,6 +208,7 @@ export interface LeaderboardEntry {
   problems_solved: number;
   total_submissions: number;
   accuracy: number;
+  rating?: number;
 }
 
 /** Leaderboard period */

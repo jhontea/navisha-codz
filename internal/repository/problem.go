@@ -148,7 +148,8 @@ func (r *ProblemRepository) loadFile(path string) (*model.Problem, error) {
 }
 
 // GetAll returns all problems sorted by difficulty then title, optionally filtered.
-func (r *ProblemRepository) GetAll(difficulty, category string) []model.Problem {
+// When tags is non-empty, only problems that have ALL the specified tags are returned.
+func (r *ProblemRepository) GetAll(difficulty, category string, tags []string) []model.Problem {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -159,6 +160,9 @@ func (r *ProblemRepository) GetAll(difficulty, category string) []model.Problem 
 			continue
 		}
 		if category != "" && !strings.EqualFold(p.Category, category) {
+			continue
+		}
+		if len(tags) > 0 && !hasAllTags(p.Tags, tags) {
 			continue
 		}
 		result = append(result, *p)
@@ -205,4 +209,21 @@ func (r *ProblemRepository) Count() int {
 func isYAMLFile(name string) bool {
 	ext := strings.ToLower(filepath.Ext(name))
 	return ext == ".yaml" || ext == ".yml"
+}
+
+// hasAllTags checks that problemTags contains every required tag (case-insensitive).
+func hasAllTags(problemTags, requiredTags []string) bool {
+	for _, required := range requiredTags {
+		found := false
+		for _, pt := range problemTags {
+			if strings.EqualFold(pt, required) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
 }

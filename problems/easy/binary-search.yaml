@@ -1,0 +1,100 @@
+id: "binary-search"
+title: "Binary Search"
+type: "function"
+difficulty: "easy"
+category: "array"
+tags: ["array", "binary-search"]
+
+description: |
+  Given an array of integers `nums` sorted in ascending order and an integer
+  `target`, write a function to search `target` in `nums`. If `target` exists,
+  return its index. Otherwise, return `-1`.
+
+  You must write an algorithm with O(log n) runtime complexity.
+
+function_name: "binarySearch"
+parameters:
+  - name: "nums"
+    type: "[]int"
+    description: "Sorted ascending array of integers"
+  - name: "target"
+    type: "int"
+    description: "Target value to search for"
+return_type: "int"
+
+examples:
+  - input: "nums = [-1,0,3,5,9,12], target = 9"
+    output: "4"
+    explanation: "9 exists in nums at index 4."
+  - input: "nums = [-1,0,3,5,9,12], target = 2"
+    output: "-1"
+    explanation: "2 does not exist in nums, so return -1."
+
+hints:
+  - level: 1
+    title: "Divide and conquer"
+    content: "The array is sorted. Can you eliminate half of the remaining elements with each comparison?"
+  - level: 2
+    title: "Three pointers"
+    content: "Use left and right pointers to track the search range. Calculate the middle index as (left + right) / 2."
+  - level: 3
+    title: "Binary search algorithm"
+    content: |
+      While left <= right:
+      1. mid = left + (right - left) / 2
+      2. If nums[mid] == target, return mid
+      3. If nums[mid] < target, search right half (left = mid + 1)
+      4. If nums[mid] > target, search left half (right = mid - 1)
+      Return -1 if not found.
+
+template: |
+  func binarySearch(nums []int, target int) int {
+      // Your code here
+      return -1
+  }
+
+test_cases:
+  - params: [[[-1, 0, 3, 5, 9, 12]], 9]
+    expected: 4
+    description: "Target exists in array"
+  - params: [[[-1, 0, 3, 5, 9, 12]], 2]
+    expected: -1
+    description: "Target does not exist"
+  - params: [[[5]], 5]
+    expected: 0
+    description: "Single element found"
+  - params: [[[5]], -1]
+    expected: -1
+    description: "Single element not found"
+  - params: [[[-10, -5, 0, 3, 7]], 3]
+    expected: 3
+    description: "Target in the middle"
+
+constraints:
+  - "1 ≤ len(nums) ≤ 10⁴"
+  - "-10⁴ < nums[i] < 10⁴"
+  - "All values in nums are unique."
+  - "nums is sorted in ascending order."
+
+time_complexity_hint: "O(log n)"
+space_complexity_hint: "O(1)"
+
+solution:
+  code: |
+    func binarySearch(nums []int, target int) int {
+        left, right := 0, len(nums)-1
+        for left <= right {
+            mid := left + (right-left)/2
+            if nums[mid] == target {
+                return mid
+            } else if nums[mid] < target {
+                left = mid + 1
+            } else {
+                right = mid - 1
+            }
+        }
+        return -1
+    }
+  approach: "Standard binary search with two pointers"
+  time_complexity: "O(log n)"
+  space_complexity: "O(1)"

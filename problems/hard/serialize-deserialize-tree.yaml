@@ -1,0 +1,177 @@
+id: "serialize-deserialize-tree"
+title: "Serialize and Deserialize Binary Tree"
+type: "function"
+difficulty: "hard"
+category: "tree"
+tags: ["tree", "binary-tree", "bfs", "string", "recursion"]
+
+description: |
+  Serialization is the process of converting a data structure or object into a
+  sequence of bits so that it can be stored in a file or memory buffer, or
+  transmitted across a network connection link to be reconstructed later in the
+  same or another computer environment.
+
+  Design an algorithm to serialize and deserialize a binary tree represented by
+  a TreeNode struct with fields `Val`, `Left`, and `Right`.
+
+  Implement two functions:
+  - `serialize(root *TreeNode) string` — encodes a tree to a single string
+  - `deserialize(data string) *TreeNode` — decodes the string back to a tree
+
+  You may use any format (e.g. level-order with null markers, or pre-order).
+
+  TreeNode is defined as:
+    type TreeNode struct {
+        Val   int
+        Left  *TreeNode
+        Right *TreeNode
+    }
+
+function_name: "serialize"
+parameters:
+  - name: "root"
+    type: "*TreeNode"
+    description: "Root of the binary tree"
+return_type: "string"
+
+examples:
+  - input: "root = [1,2,3,null,null,4,5]"
+    output: '"[1,2,3,null,null,4,5,null,null,null,null]"'
+    explanation: "Serialized using level-order with null markers. Deserializing returns the original tree."
+  - input: "root = []"
+    output: '"[]"'
+    explanation: "Empty tree serializes to an empty list."
+  - input: "root = [1]"
+    output: '"[1,null,null]"'
+    explanation: "Single node tree."
+
+hints:
+  - level: 1
+    title: "Level-order traversal"
+    content: "Use a queue to traverse the tree level by level. Include null children explicitly in the output."
+  - level: 2
+    title: "String format"
+    content: "Use a string format like '1,2,3,null,null,4,5'. Split by comma on deserialization."
+  - level: 3
+    title: "Deserialization with queue"
+    content: |
+      For deserialization:
+      1. If the input string is empty, return nil
+      2. Parse values by splitting on comma
+      3. Build root from first value, push to a queue
+      4. For each node in the queue, read the next two values for left and right children
+      5. If a value is not "null", create a new node and push it to the queue
+      6. Continue until all values are consumed
+
+template: |
+  type TreeNode struct {
+      Val   int
+      Left  *TreeNode
+      Right *TreeNode
+  }
+
+  func serialize(root *TreeNode) string {
+      // Your code here
+      return ""
+  }
+
+  func deserialize(data string) *TreeNode {
+      // Your code here
+      return nil
+  }
+
+test_cases:
+  - params: [[[1, 2, 3, nil, nil, 4, 5]]]
+    expected: "[1,2,3,null,null,4,5,null,null,null,null]"
+    description: "Standard binary tree"
+  - params: [[]]
+    expected: "[]"
+    description: "Empty tree"
+  - params: [[[1]]]
+    expected: "[1,null,null]"
+    description: "Single node"
+  - params: [[[1, nil, 2, nil, 3]]]
+    expected: "[1,null,2,null,3,null,null]"
+    description: "Right-skewed tree"
+  - params: [[[1, 2]]]
+    expected: "[1,2,null,null,null]"
+    description: "Tree with only left child"
+
+constraints:
+  - "0 ≤ number of nodes ≤ 10⁴"
+  - "-1000 ≤ Node.val ≤ 1000"
+
+time_complexity_hint: "O(n)"
+space_complexity_hint: "O(n)"
+
+solution:
+  code: |
+    import (
+        "strconv"
+        "strings"
+    )
+
+    type TreeNode struct {
+        Val   int
+        Left  *TreeNode
+        Right *TreeNode
+    }
+
+    func serialize(root *TreeNode) string {
+        if root == nil {
+            return "[]"
+        }
+        var vals []string
+        queue := []*TreeNode{root}
+        for len(queue) > 0 {
+            node := queue[0]
+            queue = queue[1:]
+            if node == nil {
+                vals = append(vals, "null")
+                continue
+            }
+            vals = append(vals, strconv.Itoa(node.Val))
+            queue = append(queue, node.Left, node.Right)
+        }
+        return "[" + strings.Join(vals, ",") + "]"
+    }
+
+    func deserialize(data string) *TreeNode {
+        if data == "[]" {
+            return nil
+        }
+        trimmed := strings.Trim(data, "[]")
+        parts := strings.Split(trimmed, ",")
+        if len(parts) == 0 || parts[0] == "" {
+            return nil
+        }
+        val, _ := strconv.Atoi(parts[0])
+        root := &TreeNode{Val: val}
+        queue := []*TreeNode{root}
+        idx := 1
+        for len(queue) > 0 && idx < len(parts) {
+            node := queue[0]
+            queue = queue[1:]
+            // Left child
+            if parts[idx] != "null" {
+                v, _ := strconv.Atoi(parts[idx])
+                node.Left = &TreeNode{Val: v}
+                queue = append(queue, node.Left)
+            }
+            idx++
+            if idx >= len(parts) {
+                break
+            }
+            // Right child
+            if parts[idx] != "null" {
+                v, _ := strconv.Atoi(parts[idx])
+                node.Right = &TreeNode{Val: v}
+                queue = append(queue, node.Right)
+            }
+            idx++
+        }
+        return root
+    }
+  approach: "Level-order traversal with queue for serialization and deserialization"
+  time_complexity: "O(n)"
+  space_complexity: "O(n)"

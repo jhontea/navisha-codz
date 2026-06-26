@@ -1,9 +1,12 @@
 # Multi-stage build for Coding Challenge Website
 # Build: docker build -t coding-challenge:latest .
 # Run: docker run -d -p 9100:9100 -v $(pwd)/problems:/app/problems:ro coding-challenge:latest
+#
+# Uses .dockerignore to exclude node_modules, .git, *.md, docs/ from build context.
+# Layer caching optimized: go.mod/go.sum copied before source code.
 
 # ---- Build Stage ----
-FROM golang:1.22-alpine AS builder
+FROM golang:1.21-alpine AS builder
 
 # Install build dependencies
 RUN apk add --no-cache git ca-certificates tzdata
@@ -11,7 +14,7 @@ RUN apk add --no-cache git ca-certificates tzdata
 # Set working directory
 WORKDIR /app
 
-# Copy go mod files first (for layer caching)
+# Copy go mod files first (for layer caching — dependencies only re-download when go.mod/go.sum change)
 COPY go.mod go.sum ./
 RUN go mod download && go mod verify
 
@@ -25,7 +28,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -o server cmd/server/main.go
 
 # ---- Runtime Stage ----
-FROM alpine:3.19
+FROM alpine:3.18
 
 # Install runtime dependencies
 RUN apk add --no-cache ca-certificates tzdata

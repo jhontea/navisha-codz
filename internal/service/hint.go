@@ -26,8 +26,9 @@ func NewHintService() *HintService {
 }
 
 // GetHints returns the next batch of hints for a problem based on how many
-// have already been revealed. At most 2 hints are revealed per request.
-func (s *HintService) GetHints(problem *model.Problem) []model.Hint {
+// have already been revealed for this user. At most 2 hints are revealed per request.
+// The revealed count is tracked per user+problem to prevent cross-user leakage.
+func (s *HintService) GetHints(userID string, problem *model.Problem) []model.Hint {
 	if problem == nil {
 		return nil
 	}
@@ -35,7 +36,8 @@ func (s *HintService) GetHints(problem *model.Problem) []model.Hint {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	revealed := s.revealed[problem.ID]
+	key := userID + ":" + problem.ID
+	revealed := s.revealed[key]
 
 	// Return all hints up to current reveal level + 2 (progressive reveal)
 	nextLevel := revealed + 2
@@ -54,7 +56,7 @@ func (s *HintService) GetHints(problem *model.Problem) []model.Hint {
 		result = append(result, problem.Hints[i])
 	}
 
-	s.revealed[problem.ID] = end
+	s.revealed[key] = end
 
 	// Sort by level
 	sort.Slice(result, func(i, j int) bool {
@@ -72,11 +74,11 @@ func (s *HintService) GetFullHints(problem *model.Problem) []model.Hint {
 	return problem.Hints
 }
 
-// Reset resets the reveal tracking for a problem.
-func (s *HintService) Reset(problemID string) {
+// Reset resets the reveal tracking for a problem for a specific user.
+func (s *HintService) Reset(userID, problemID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	delete(s.revealed, problemID)
+	delete(s.revealed, userID+":"+problemID)
 }
 
 // BuildTestHarness generates a Go test harness source file from test cases.

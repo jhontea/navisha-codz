@@ -16,8 +16,8 @@ func TestNewProblemRepository_ValidDir(t *testing.T) {
 	if repo == nil {
 		t.Fatal("expected repo to be non-nil")
 	}
-	if repo.Count() != 10 {
-		t.Errorf("expected 10 problems, got %d", repo.Count())
+	if repo.Count() != 20 {
+		t.Errorf("expected 20 problems, got %d", repo.Count())
 	}
 }
 
@@ -117,9 +117,9 @@ func TestGetAll_NoFilter(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	problems := repo.GetAll("", "")
-	if len(problems) != 10 {
-		t.Errorf("expected 10 problems, got %d", len(problems))
+	problems := repo.GetAll("", "", nil)
+	if len(problems) != 20 {
+			t.Errorf("expected 20 problems, got %d", len(problems))
 	}
 
 	// Check sorting: easy first, then medium
@@ -134,9 +134,9 @@ func TestGetAll_FilterByDifficulty(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	easy := repo.GetAll("easy", "")
-	if len(easy) != 5 {
-		t.Errorf("expected 5 easy problems, got %d", len(easy))
+	easy := repo.GetAll("easy", "", nil)
+	if len(easy) != 7 {
+		t.Errorf("expected 7 easy problems, got %d", len(easy))
 	}
 	for _, p := range easy {
 		if p.Difficulty != "easy" {
@@ -144,14 +144,14 @@ func TestGetAll_FilterByDifficulty(t *testing.T) {
 		}
 	}
 
-	medium := repo.GetAll("medium", "")
-	if len(medium) != 2 {
-		t.Errorf("expected 2 medium problems, got %d", len(medium))
+	medium := repo.GetAll("medium", "", nil)
+	if len(medium) != 7 {
+		t.Errorf("expected 7 medium problems, got %d", len(medium))
 	}
 
-	hard := repo.GetAll("hard", "")
-	if len(hard) != 3 {
-		t.Errorf("expected 3 hard problems, got %d", len(hard))
+	hard := repo.GetAll("hard", "", nil)
+	if len(hard) != 6 {
+		t.Errorf("expected 6 hard problems, got %d", len(hard))
 	}
 }
 
@@ -161,9 +161,52 @@ func TestGetAll_FilterByCategory(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	arrayProbs := repo.GetAll("", "array")
-	if len(arrayProbs) != 6 {
-		t.Errorf("expected 6 array problems, got %d", len(arrayProbs))
+	arrayProbs := repo.GetAll("", "array", nil)
+	if len(arrayProbs) != 9 {
+		t.Errorf("expected 9 array problems, got %d", len(arrayProbs))
+	}
+}
+
+func TestGetAll_FilterByTags(t *testing.T) {
+	repo, err := NewProblemRepository("../../problems")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Filter by single tag
+	backtracking := repo.GetAll("", "", []string{"backtracking"})
+	if len(backtracking) != 3 {
+		t.Errorf("expected 3 backtracking problems, got %d", len(backtracking))
+	}
+
+	// Filter by multiple tags (AND logic)
+	dpString := repo.GetAll("", "", []string{"dp", "string"})
+	if len(dpString) != 2 {
+		t.Errorf("expected 2 problems with dp+string tags, got %d", len(dpString))
+	}
+
+	// Filter by tags + difficulty
+	hardBacktracking := repo.GetAll("hard", "", []string{"backtracking"})
+	if len(hardBacktracking) != 2 {
+		t.Errorf("expected 2 hard backtracking problems, got %d", len(hardBacktracking))
+	}
+
+	// Case-insensitive tags
+	caseInsensitive := repo.GetAll("", "", []string{"BACKTRACKING"})
+	if len(caseInsensitive) != 3 {
+		t.Errorf("expected 3 problems with case-insensitive tag, got %d", len(caseInsensitive))
+	}
+
+	// Non-existent tag
+	noMatch := repo.GetAll("", "", []string{"nonexistent-tag"})
+	if len(noMatch) != 0 {
+		t.Errorf("expected 0 problems for non-existent tag, got %d", len(noMatch))
+	}
+
+	// Empty tag list should return all
+	all := repo.GetAll("", "", []string{})
+	if len(all) != 20 {
+		t.Errorf("expected 20 problems with empty tag filter, got %d", len(all))
 	}
 }
 
@@ -173,8 +216,8 @@ func TestGetAll_CaseInsensitive(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	upper := repo.GetAll("EASY", "")
-	lower := repo.GetAll("easy", "")
+	upper := repo.GetAll("EASY", "", nil)
+	lower := repo.GetAll("easy", "", nil)
 	if len(upper) != len(lower) {
 		t.Errorf("case insensitive filter failed: upper=%d, lower=%d", len(upper), len(lower))
 	}
@@ -186,7 +229,7 @@ func TestGetAll_NonExistentFilter(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result := repo.GetAll("impossible", "")
+	result := repo.GetAll("impossible", "", nil)
 	if len(result) != 0 {
 		t.Errorf("expected 0 problems, got %d", len(result))
 	}
@@ -240,8 +283,8 @@ func TestCount(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if repo.Count() != 10 {
-		t.Errorf("expected count 10, got %d", repo.Count())
+	if repo.Count() != 20 {
+		t.Errorf("expected count 20, got %d", repo.Count())
 	}
 }
 
@@ -371,7 +414,7 @@ func TestConcurrency(t *testing.T) {
 	done := make(chan bool, 10)
 	for i := 0; i < 10; i++ {
 		go func() {
-			_ = repo.GetAll("", "")
+			_ = repo.GetAll("", "", nil)
 			_ = repo.GetByID("two-sum")
 			_ = repo.Count()
 			done <- true

@@ -2,101 +2,31 @@ package handler
 
 import (
 	"fmt"
-	"net"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"coding-challange/internal/model"
 	"coding-challange/internal/service"
+	"coding-challange/pkg/middleware"
 )
 
 // ProblemHandler handles HTTP requests for problems.
 type ProblemHandler struct {
-	problemSvc *service.ProblemService
-	runnerSvc  *service.RunnerService
+	problemSvc  *service.ProblemService
 	hintSvc    *service.HintService
-	rateLimiter *RateLimiter
+	rateLimiter *middleware.RateLimiter
 }
 
 // NewProblemHandler creates a new problem handler.
-func NewProblemHandler(problemSvc *service.ProblemService, runnerSvc *service.RunnerService, hintSvc *service.HintService) *ProblemHandler {
+func NewProblemHandler(problemSvc *service.ProblemService, hintSvc *service.HintService) *ProblemHandler {
 	return &ProblemHandler{
 		problemSvc:  problemSvc,
-		runnerSvc:   runnerSvc,
 		hintSvc:     hintSvc,
-		rateLimiter: NewRateLimiter(),
+		rateLimiter: middleware.NewRateLimiter(0, time.Minute),
 	}
-}
-
-// RateLimiter provides simple in-memory rate limiting.
-type RateLimiter struct {
-	mu       sync.RWMutex
-	visitors map[string]*visitor
-}
-
-type visitor struct {
-	lastSeen  time.Time
-	count     int
-	windowStart time.Time
-}
-
-// NewRateLimiter creates a new rate limiter.
-func NewRateLimiter() *RateLimiter {
-	return &RateLimiter{
-		visitors: make(map[string]*visitor),
-	}
-}
-
-// isAllowed checks if a request from the given IP is allowed under the rate limit.
-// Returns true if allowed, false if rate limited.
-func (rl *RateLimiter) isAllowed(ip string, limit int, window time.Duration) bool {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-
-	now := time.Now()
-	v, exists := rl.visitors[ip]
-
-	if !exists || now.Sub(v.windowStart) > window {
-		// New window
-		rl.visitors[ip] = &visitor{
-			lastSeen:    now,
-			count:       1,
-			windowStart: now,
-		}
-		return true
-	}
-
-	if v.count >= limit {
-		return false
-	}
-
-	v.count++
-	v.lastSeen = now
-	return true
-}
-
-// getClientIP extracts the client IP from the request.
-func getClientIP(c *gin.Context) string {
-	// Check X-Forwarded-For header first
-	xff := c.GetHeader("X-Forwarded-For")
-	if xff != "" {
-		ips := strings.Split(xff, ",")
-		return strings.TrimSpace(ips[0])
-	}
-
-	// Check X-Real-Ip header
-	xri := c.GetHeader("X-Real-Ip")
-	if xri != "" {
-		return xri
-	}
-
-	// Fall back to connection IP
-	ip, _, _ := net.SplitHostPort(c.Request.RemoteAddr)
-	return ip
 }
 
 // writeMeta creates a Meta struct for responses.
@@ -128,10 +58,36 @@ func writeErrorResponse(c *gin.Context, code int, errType, message string) {
 }
 
 // ListProblems handles GET /api/problems
+// @Summary      List all problems
+// @Description  Get a paginated list of coding challenge problems with optional filters
+// @Tags         problems
+// @Accept       json
+// @Produce      json
+// @Param        difficulty  query     string  false  "Filter by difficulty (easy, medium, hard)"
+// @Param        category    query     string  false  "Filter by category (e.g. array, string)"
+// @Param        type        query     string  false  "Filter by type (function, main)"
+// @Param        tags        query     string  false  "Filter by tags (comma-separated)"
+// @Success      200  {object}  model.APIResponse{data=[]model.ProblemSummary}
+// @Failure      400  {object}  model.APIErrorResponse
+// @Failure      429  {object}  model.APIErrorResponse
+// @Failure      500  {object}  model.APIErrorResponse
+// @Router       /api/problems [get]
 func (h *ProblemHandler) ListProblems(c *gin.Context) {
 	difficulty := c.Query("difficulty")
 	category := c.Query("category")
 	problemType := c.Query("type")
+	tagsParam := c.Query("tags")
+
+	// Parse tags query param (comma-separated, trimmed)
+	var tags []string
+	if tagsParam != "" {
+		for _, t := range strings.Split(tagsParam, ",") {
+			trimmed := strings.TrimSpace(t)
+			if trimmed != "" {
+				tags = append(tags, trimmed)
+			}
+		}
+	}
 
 	// Validate difficulty if provided
 	if difficulty != "" {
@@ -154,14 +110,14 @@ func (h *ProblemHandler) ListProblems(c *gin.Context) {
 	}
 
 	// Rate limit: 60 req/min for list endpoints
-	ip := getClientIP(c)
-	if !h.rateLimiter.isAllowed(ip, 60, time.Minute) {
+	ip := c.ClientIP()
+	if !h.rateLimiter.AllowWithLimit(ip, 60, time.Minute) {
 		writeErrorResponse(c, http.StatusTooManyRequests, "rate_limit_error",
 			"rate limit exceeded, try again later")
 		return
 	}
 
-	problems := h.problemSvc.ListProblems(difficulty, category)
+	problems := h.problemSvc.ListProblems(difficulty, category, tags)
 
 	// Filter by type if specified (post-filter since repo doesn't support it)
 	if problemType != "" {
@@ -178,6 +134,17 @@ func (h *ProblemHandler) ListProblems(c *gin.Context) {
 }
 
 // GetProblem handles GET /api/problems/:id
+// @Summary      Get a problem by ID
+// @Description  Get full details of a specific coding challenge problem by its ID
+// @Tags         problems
+// @Accept       json
+// @Produce      json
+// @Param        id   path      string  true  "Problem ID"
+// @Success      200  {object}  model.APIResponse{data=model.Problem}
+// @Failure      400  {object}  model.APIErrorResponse
+// @Failure      404  {object}  model.APIErrorResponse
+// @Failure      500  {object}  model.APIErrorResponse
+// @Router       /api/problems/{id} [get]
 func (h *ProblemHandler) GetProblem(c *gin.Context) {
 	id := c.Param("id")
 
@@ -196,6 +163,17 @@ func (h *ProblemHandler) GetProblem(c *gin.Context) {
 }
 
 // GetTemplate handles GET /api/problems/:id/template
+// @Summary      Get problem template code
+// @Description  Get the template/starter code for a specific problem
+// @Tags         problems
+// @Accept       json
+// @Produce      json
+// @Param        id   path      string  true  "Problem ID"
+// @Success      200  {object}  model.APIResponse{data=model.Problem}
+// @Failure      400  {object}  model.APIErrorResponse
+// @Failure      404  {object}  model.APIErrorResponse
+// @Failure      500  {object}  model.APIErrorResponse
+// @Router       /api/problems/{id}/template [get]
 func (h *ProblemHandler) GetTemplate(c *gin.Context) {
 	id := c.Param("id")
 
@@ -213,66 +191,34 @@ func (h *ProblemHandler) GetTemplate(c *gin.Context) {
 	writeSuccessResponse(c, template)
 }
 
-// RunCode handles POST /api/problems/:id/run
-func (h *ProblemHandler) RunCode(c *gin.Context) {
-	id := c.Param("id")
-
-	if err := service.SanitizeProblemID(id); err != nil {
-		writeErrorResponse(c, http.StatusBadRequest, "validation_error", err.Error())
-		return
-	}
-
-	// Rate limit: 10 req/min for run endpoint
-	ip := getClientIP(c)
-	if !h.rateLimiter.isAllowed(ip+":run", 10, time.Minute) {
-		writeErrorResponse(c, http.StatusTooManyRequests, "rate_limit_error",
-			"rate limit exceeded, try again in 30 seconds")
-		return
-	}
-
-	var req struct {
-		Code string `json:"code" binding:"required"`
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		writeErrorResponse(c, http.StatusBadRequest, "validation_error", "code field is required")
-		return
-	}
-
-	if strings.TrimSpace(req.Code) == "" {
-		writeErrorResponse(c, http.StatusBadRequest, "validation_error", "code field cannot be empty")
-		return
-	}
-
-	if err := service.ValidateCodeSize(req.Code); err != nil {
-		writeErrorResponse(c, http.StatusBadRequest, "validation_error", err.Error())
-		return
-	}
-
-	problem, err := h.problemSvc.GetProblem(id)
-	if err != nil {
-		writeErrorResponse(c, http.StatusNotFound, "not_found", err.Error())
-		return
-	}
-
-	result := h.runnerSvc.RunCode(req.Code, problem)
-	writeSuccessResponse(c, result)
+// ValidateCodeRequest is the request body for code validation.
+type ValidateCodeRequest struct {
+	Code      string `json:"code" binding:"required"`
+	ProblemID string `json:"problem_id"`
 }
 
 // ValidateCode handles POST /api/validate
+// @Summary      Validate code syntax
+// @Description  Validate the syntax of submitted code for a problem
+// @Tags         problems
+// @Accept       json
+// @Produce      json
+// @Param        request  body  ValidateCodeRequest  true  "Code to validate"
+// @Success      200  {object}  model.APIResponse{data=model.ValidationResult}
+// @Failure      400  {object}  model.APIErrorResponse
+// @Failure      429  {object}  model.APIErrorResponse
+// @Failure      500  {object}  model.APIErrorResponse
+// @Router       /api/validate [post]
 func (h *ProblemHandler) ValidateCode(c *gin.Context) {
 	// Rate limit: 30 req/min for validate endpoint
-	ip := getClientIP(c)
-	if !h.rateLimiter.isAllowed(ip+":validate", 30, time.Minute) {
+	ip := c.ClientIP()
+	if !h.rateLimiter.AllowWithLimit(ip+":validate", 30, time.Minute) {
 		writeErrorResponse(c, http.StatusTooManyRequests, "rate_limit_error",
 			"rate limit exceeded, try again later")
 		return
 	}
 
-	var req struct {
-		Code       string `json:"code" binding:"required"`
-		ProblemID string `json:"problem_id"`
-	}
+	var req ValidateCodeRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		writeErrorResponse(c, http.StatusBadRequest, "validation_error", "code field is required")
@@ -289,6 +235,17 @@ func (h *ProblemHandler) ValidateCode(c *gin.Context) {
 }
 
 // GetHints handles GET /api/problems/:id/hints
+// @Summary      Get hints for a problem
+// @Description  Get progressive hints to help solve a specific coding challenge problem
+// @Tags         problems
+// @Accept       json
+// @Produce      json
+// @Param        id   path      string  true  "Problem ID"
+// @Success      200  {object}  model.APIResponse{data=map[string][]model.Hint}
+// @Failure      400  {object}  model.APIErrorResponse
+// @Failure      404  {object}  model.APIErrorResponse
+// @Failure      500  {object}  model.APIErrorResponse
+// @Router       /api/problems/{id}/hints [get]
 func (h *ProblemHandler) GetHints(c *gin.Context) {
 	id := c.Param("id")
 
@@ -303,11 +260,19 @@ func (h *ProblemHandler) GetHints(c *gin.Context) {
 		return
 	}
 
-	hints := h.hintSvc.GetHints(problem)
+	hints := h.hintSvc.GetHints("anonymous", problem)
 	writeSuccessResponse(c, gin.H{"hints": hints})
 }
 
 // HealthCheck handles GET /health
+// @Summary      Health check
+// @Description  Check the health status of the API service
+// @Tags         system
+// @Accept       json
+// @Produce      json
+// @Success      200  {object}  model.APIResponse{data=object}
+// @Failure      500  {object}  model.APIErrorResponse
+// @Router       /health [get]
 func (h *ProblemHandler) HealthCheck(c *gin.Context) {
 	writeSuccessResponse(c, gin.H{
 		"status":  "ok",

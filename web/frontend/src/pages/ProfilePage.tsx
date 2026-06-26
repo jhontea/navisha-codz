@@ -1,6 +1,5 @@
-import React from "react";
 import { useQuery } from "react-query";
-import { User, Mail, Trophy, Target, Calendar } from "lucide-react";
+import { Mail, Trophy, Target, Calendar } from "lucide-react";
 import { authApi } from "../services/api";
 import { useAuthStore } from "../store/authStore";
 import { PageLoader } from "../components/ui/LoadingSpinner";

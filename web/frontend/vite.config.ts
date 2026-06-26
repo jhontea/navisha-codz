@@ -1,6 +1,8 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { visualizer } from "rollup-plugin-visualizer";
+import type { Plugin } from "vite";
 
 export default defineConfig({
   plugins: [
@@ -42,5 +44,12 @@ export default defineConfig({
         drop_debugger: true,
       },
     },
+  },
+  // ── Vitest Configuration ───────────────────────────────────────────
+  test: {
+    globals: true,
+    environment: "jsdom",
+    setupFiles: ["./src/__tests__/setup.ts"],
+    css: true,
   },
 });

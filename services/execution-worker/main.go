@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -130,6 +132,79 @@ type Consumer struct {
 	server      *Server
 	workerID    string
 	maxRetries  int
+	pool        *WorkerPool
+}
+
+// WorkerPool manages a pool of goroutine workers for processing execution messages.
+type WorkerPool struct {
+	workers    int
+	jobCh      chan workerJob
+	wg         sync.WaitGroup
+	ctx        context.Context
+	cancel     context.CancelFunc
+}
+
+type workerJob struct {
+	priority bool
+	msg      ExecutionMessage
+	consumer *Consumer
+}
+
+// NewWorkerPool creates a new worker pool with the specified number of workers.
+func NewWorkerPool(parentCtx context.Context, numWorkers int) *WorkerPool {
+	if numWorkers < 1 {
+		numWorkers = 1
+	}
+	if numWorkers > 10 {
+		numWorkers = 10
+	}
+	ctx, cancel := context.WithCancel(parentCtx)
+	pool := &WorkerPool{
+		workers: numWorkers,
+		jobCh:   make(chan workerJob, 100),
+		ctx:     ctx,
+		cancel:  cancel,
+	}
+	pool.start()
+	return pool
+}
+
+// start launches the worker goroutines.
+func (wp *WorkerPool) start() {
+	for i := 0; i < wp.workers; i++ {
+		wp.wg.Add(1)
+		go wp.worker(i)
+	}
+}
+
+// worker is a single worker goroutine that processes jobs from the channel.
+func (wp *WorkerPool) worker(id int) {
+	defer wp.wg.Done()
+	for {
+		select {
+		case <-wp.ctx.Done():
+			return
+		case job, ok := <-wp.jobCh:
+			if !ok {
+				return
+			}
+			job.consumer.processWithRetry(wp.ctx, job.msg, 0)
+		}
+	}
+}
+
+// Submit sends a job to the worker pool.
+func (wp *WorkerPool) Submit(job workerJob) {
+	select {
+	case wp.jobCh <- job:
+	case <-wp.ctx.Done():
+	}
+}
+
+// Stop gracefully shuts down the worker pool.
+func (wp *WorkerPool) Stop() {
+	wp.cancel()
+	wp.wg.Wait()
 }
 
 // NewConsumer creates a new RabbitMQ consumer for the execution worker.
@@ -146,20 +221,19 @@ func NewConsumer(client *rabbitmq.Client, srv *Server) *Consumer {
 	}
 }
 
-// Start begins consuming messages from the code execution queue with priority handling.
+// Start begins consuming messages from the code execution queue with priority handling
+// using a bounded worker pool.
 func (c *Consumer) Start(ctx context.Context) error {
-	// Start worker goroutines for priority queue
-	for i := 0; i < 3; i++ {
-		go c.processPriorityWorker(ctx)
+	// Create worker pool: use config's MaxConcurrentExecutions, default 4, max 10
+	numWorkers := c.server.config.MaxConcurrentExecutions
+	if numWorkers < 1 {
+		numWorkers = 4
 	}
-
-	// Start worker goroutines for normal queue
-	for i := 0; i < 2; i++ {
-		go c.processNormalWorker(ctx)
+	if numWorkers > 10 {
+		numWorkers = 10
 	}
-
-	// Start dead letter queue processor
-	go c.processDeadLetterQueue(ctx)
+	c.pool = NewWorkerPool(ctx, numWorkers)
+	log.Printf("[WORKER POOL] Started %d workers (max 10)", numWorkers)
 
 	// Start work stealing goroutine
 	go c.workStealing(ctx)
@@ -168,7 +242,8 @@ func (c *Consumer) Start(ctx context.Context) error {
 	return c.client.Consume(ctx, rabbitmq.QueueCodeExecution, c.handleMessage)
 }
 
-// handleMessage processes a single execution message with priority routing.
+// handleMessage processes a single execution message with priority routing,
+// submitting directly to the worker pool.
 func (c *Consumer) handleMessage(msg amqp.Delivery) error {
 	var execMsg ExecutionMessage
 	if err := json.Unmarshal(msg.Body, &execMsg); err != nil {
@@ -180,42 +255,12 @@ func (c *Consumer) handleMessage(msg amqp.Delivery) error {
 	log.Printf("Received submission: %s (problem: %d, user: %s, lang: %s, priority: %d)",
 		execMsg.SubmissionID, execMsg.ProblemID, execMsg.UserID, execMsg.Language, execMsg.Priority)
 
-	// Route to appropriate queue based on priority (premium = priority 1)
-	if execMsg.Priority >= 1 {
-		select {
-		case c.priorityQ <- execMsg:
-			msg.Ack(false)
-		default:
-			// Priority queue full, try normal queue
-			select {
-			case c.normalQ <- execMsg:
-				msg.Ack(false)
-			default:
-				// All queues full, send to dead letter queue
-				select {
-				case c.dlq <- execMsg:
-					msg.Ack(false)
-				default:
-					log.Printf("Dead letter queue also full for %s, will retry", execMsg.SubmissionID)
-					msg.Nack(false, true) // Requeue
-				}
-			}
-		}
-	} else {
-		select {
-		case c.normalQ <- execMsg:
-			msg.Ack(false)
-		default:
-			// Normal queue full, send to dead letter queue
-			select {
-			case c.dlq <- execMsg:
-				msg.Ack(false)
-			default:
-				log.Printf("Dead letter queue also full for %s, will retry", execMsg.SubmissionID)
-				msg.Nack(false, true)
-			}
-		}
-	}
+	msg.Ack(false)
+	c.pool.Submit(workerJob{
+		priority: execMsg.Priority >= 1,
+		msg:      execMsg,
+		consumer: c,
+	})
 
 	return nil
 }
@@ -331,11 +376,18 @@ func (c *Consumer) processWithRetry(ctx context.Context, msg ExecutionMessage, a
 	c.server.publishResult(ctx, msg, result)
 }
 
-// logQueueDepth logs the current queue depths for monitoring.
+// logQueueDepth logs the current queue depths and worker pool stats for monitoring.
 func (c *Consumer) logQueueDepth() {
-	log.Printf("Queue depths - Priority: %d, Normal: %d, DLQ: %d, Semaphore: %d/%d",
+	poolWorkers := 0
+	poolJobs := 0
+	if c.pool != nil {
+		poolWorkers = c.pool.workers
+		poolJobs = len(c.pool.jobCh)
+	}
+	log.Printf("Queue depths - Priority: %d, Normal: %d, DLQ: %d, Semaphore: %d/%d, Pool: jobs=%d workers=%d",
 		len(c.priorityQ), len(c.normalQ), len(c.dlq),
-		len(c.server.execSem), cap(c.server.execSem))
+		len(c.server.execSem), cap(c.server.execSem),
+		poolJobs, poolWorkers)
 }
 
 // processSubmission executes the submission with parallel test case processing.
@@ -640,9 +692,65 @@ func (s *Server) publishResult(ctx context.Context, msg ExecutionMessage, result
 		s.redis.Set(ctx, cacheKey, result, time.Hour)
 	}
 
+	// Trigger leaderboard update
+	s.updateLeaderboard(ctx, msg, result)
+
 	log.Printf("Submission %s completed: status=%s score=%d passed=%d/%d",
 		result.SubmissionID, result.Status, result.Score,
 		result.TestCasesPassed, result.TestCasesTotal)
+}
+
+// updateLeaderboard calls the leaderboard service to update rankings after a submission completes.
+func (s *Server) updateLeaderboard(ctx context.Context, msg ExecutionMessage, result *ExecutionResult) {
+	leaderboardURL := getEnv("LEADERBOARD_SERVICE_URL", "http://leaderboard-service:9104")
+	endpoint := fmt.Sprintf("%s/api/internal/update-score", leaderboardURL)
+
+	// Get problem difficulty for ELO calculation
+	var difficulty string
+	err := s.db.QueryRow(ctx, "SELECT COALESCE(difficulty, 'medium') FROM problems WHERE id = $1", msg.ProblemID).Scan(&difficulty)
+	if err != nil {
+		log.Printf("Failed to get problem difficulty for leaderboard update: %v", err)
+		difficulty = "medium"
+	}
+
+	// Get problem_id as string for the leaderboard API
+	problemIDStr := strconv.Itoa(msg.ProblemID)
+
+	payload := map[string]interface{}{
+		"user_id":          msg.UserID,
+		"submission_id":    result.SubmissionID,
+		"problem_id":       problemIDStr,
+		"score":            result.Score,
+		"difficulty":       difficulty,
+		"status":           result.Status,
+		"execution_time_ms": result.ExecutionTimeMs,
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("Failed to marshal leaderboard payload: %v", err)
+		return
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+	if err != nil {
+		log.Printf("Failed to create leaderboard request: %v", err)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Printf("Failed to call leaderboard service: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		log.Printf("Leaderboard service returned status %d for submission %s", resp.StatusCode, result.SubmissionID)
+	} else {
+		log.Printf("Leaderboard updated for submission %s (status: %s)", result.SubmissionID, result.Status)
+	}
 }
 
 func main() {
@@ -764,12 +872,12 @@ func (s *Server) healthCheckHandler(w http.ResponseWriter, r *http.Request) {
 	sandboxStatus := "ok"
 
 	if err := s.db.HealthCheck(ctx); err != nil {
-		dbStatus = "error: " + err.Error()
+		dbStatus = "unavailable"
 		status = "degraded"
 	}
 	if s.rabbitmq != nil {
 		if err := s.rabbitmq.HealthCheck(ctx); err != nil {
-			rmqStatus = "error: " + err.Error()
+			rmqStatus = "unavailable"
 			status = "degraded"
 		}
 	}

@@ -60,7 +60,7 @@ func TestTTLValues(t *testing.T) {
 		{"TTLUser", TTLUser, 1 * time.Hour},
 		{"TTLUserStats", TTLUserStats, 5 * time.Minute},
 		{"TTLProblem", TTLProblem, 30 * time.Minute},
-		{"TTLProblemList", TTLProblemList, 10 * time.Minute},
+		{"TTLProblemList", TTLProblemList, 5 * time.Minute},
 		{"TTLLeaderboard", TTLLeaderboard, 1 * time.Minute},
 		{"TTLSubmission", TTLSubmission, 5 * time.Minute},
 		{"TTLRateLimit", TTLRateLimit, 1 * time.Minute},

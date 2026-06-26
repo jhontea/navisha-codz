@@ -1,0 +1,357 @@
+{
+  "dashboard": {
+    "title": "Services Overview",
+    "uid": "coding-challange-services",
+    "description": "Monitoring dashboard for all microservices — CPU, Memory, Request Rate, Error Rate, and Latency p95",
+    "timezone": "browser",
+    "editable": true,
+    "refresh": "15s",
+    "panels": [
+      {
+        "title": "CPU Usage per Service",
+        "type": "timeseries",
+        "id": 1,
+        "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(process_cpu_seconds_total{job=~\"auth-service|problem-service|execution-service|execution-worker|leaderboard-service|hint-service|websocket-service|api-gateway\"}[1m])",
+            "legendFormat": "{{job}}",
+            "interval": "15s"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "custom": {
+              "spanNulls": true,
+              "lineInterpolation": "smooth",
+              "showPoints": "never"
+            }
+          }
+        }
+      },
+      {
+        "title": "Memory Usage per Service",
+        "type": "timeseries",
+        "id": 2,
+        "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "go_memstats_alloc_bytes{job=~\"auth-service|problem-service|execution-service|execution-worker|leaderboard-service|hint-service|websocket-service|api-gateway\"}",
+            "legendFormat": "{{job}}",
+            "interval": "15s"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "min": 0,
+            "custom": {
+              "spanNulls": true,
+              "lineInterpolation": "smooth",
+              "showPoints": "never"
+            }
+          }
+        }
+      },
+      {
+        "title": "Goroutines per Service",
+        "type": "timeseries",
+        "id": 3,
+        "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "go_goroutines{job=~\"auth-service|problem-service|execution-service|execution-worker|leaderboard-service|hint-service|websocket-service|api-gateway\"}",
+            "legendFormat": "{{job}}",
+            "interval": "15s"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "min": 0,
+            "custom": {
+              "spanNulls": true,
+              "lineInterpolation": "smooth",
+              "showPoints": "never"
+            }
+          }
+        }
+      },
+      {
+        "title": "Open File Descriptors per Service",
+        "type": "timeseries",
+        "id": 4,
+        "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "process_open_fds{job=~\"auth-service|problem-service|execution-service|execution-worker|leaderboard-service|hint-service|websocket-service|api-gateway\"}",
+            "legendFormat": "{{job}}",
+            "interval": "15s"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "min": 0,
+            "custom": {
+              "spanNulls": true,
+              "lineInterpolation": "smooth",
+              "showPoints": "never"
+            }
+          }
+        }
+      },
+      {
+        "title": "Request Rate (HTTP req/s)",
+        "type": "timeseries",
+        "id": 5,
+        "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(gin_requests_total{job=~\"auth-service|problem-service|execution-service|leaderboard-service|hint-service|websocket-service|api-gateway\"}[1m])) by (job, method, status_code)",
+            "legendFormat": "{{job}} ({{method}} {{status_code}})",
+            "interval": "15s"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps",
+            "min": 0,
+            "custom": {
+              "spanNulls": true,
+              "lineInterpolation": "smooth",
+              "showPoints": "never"
+            }
+          }
+        }
+      },
+      {
+        "title": "Error Rate (HTTP 5xx/s)",
+        "type": "timeseries",
+        "id": 6,
+        "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(gin_requests_total{job=~\"auth-service|problem-service|execution-service|leaderboard-service|hint-service|websocket-service|api-gateway\", status_code=~\"5..\"}[1m])) by (job)",
+            "legendFormat": "{{job}}",
+            "interval": "15s"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps",
+            "min": 0,
+            "custom": {
+              "spanNulls": true,
+              "lineInterpolation": "smooth",
+              "showPoints": "never"
+            },
+            "color": {"mode": "palette-classic"}
+          }
+        }
+      },
+      {
+        "title": "Latency p95 per Service",
+        "type": "timeseries",
+        "id": 7,
+        "gridPos": {"x": 0, "y": 24, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(gin_request_duration_seconds_bucket{job=~\"auth-service|problem-service|execution-service|leaderboard-service|hint-service|websocket-service|api-gateway\"}[1m])) by (job, le))",
+            "legendFormat": "{{job}}",
+            "interval": "15s"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "min": 0,
+            "custom": {
+              "spanNulls": true,
+              "lineInterpolation": "smooth",
+              "showPoints": "never"
+            }
+          }
+        }
+      },
+      {
+        "title": "Latency p99 per Service",
+        "type": "timeseries",
+        "id": 8,
+        "gridPos": {"x": 12, "y": 24, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(gin_request_duration_seconds_bucket{job=~\"auth-service|problem-service|execution-service|leaderboard-service|hint-service|websocket-service|api-gateway\"}[1m])) by (job, le))",
+            "legendFormat": "{{job}}",
+            "interval": "15s"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "min": 0,
+            "custom": {
+              "spanNulls": true,
+              "lineInterpolation": "smooth",
+              "showPoints": "never"
+            }
+          }
+        }
+      },
+      {
+        "title": "GC Duration per Service",
+        "type": "timeseries",
+        "id": 9,
+        "gridPos": {"x": 0, "y": 32, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(go_gc_duration_seconds_sum{job=~\"auth-service|problem-service|execution-service|execution-worker|leaderboard-service|hint-service|websocket-service|api-gateway\"}[1m])",
+            "legendFormat": "{{job}}",
+            "interval": "15s"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "min": 0,
+            "custom": {
+              "spanNulls": true,
+              "lineInterpolation": "smooth",
+              "showPoints": "never"
+            }
+          }
+        }
+      },
+      {
+        "title": "Heap Memory In Use per Service",
+        "type": "timeseries",
+        "id": 10,
+        "gridPos": {"x": 12, "y": 32, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "go_memstats_heap_inuse_bytes{job=~\"auth-service|problem-service|execution-service|execution-worker|leaderboard-service|hint-service|websocket-service|api-gateway\"}",
+            "legendFormat": "{{job}}",
+            "interval": "15s"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "min": 0,
+            "custom": {
+              "spanNulls": true,
+              "lineInterpolation": "smooth",
+              "showPoints": "never"
+            }
+          }
+        }
+      },
+      {
+        "title": "Service Health Check Status",
+        "type": "stat",
+        "id": 11,
+        "gridPos": {"x": 0, "y": 40, "w": 12, "h": 6},
+        "targets": [
+          {
+            "expr": "up{job=~\"auth-service|problem-service|execution-service|execution-worker|leaderboard-service|hint-service|websocket-service|api-gateway\"}",
+            "legendFormat": "{{job}}",
+            "interval": "15s"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "none",
+            "min": 0,
+            "max": 1,
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "green", "value": 1}
+              ]
+            },
+            "custom": {
+              "displayMode": "list",
+              "showThresholdLabels": false,
+              "showThresholdMarkers": true
+            }
+          }
+        },
+        "options": {
+          "orientation": "horizontal",
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"]
+          },
+          "textMode": "value_and_name"
+        }
+      },
+      {
+        "title": "Queue Depth (Execution Worker)",
+        "type": "timeseries",
+        "id": 12,
+        "gridPos": {"x": 12, "y": 40, "w": 12, "h": 6},
+        "targets": [
+          {
+            "expr": "rabbitmq_queue_messages{job=\"rabbitmq\", queue=~\"execution.*\"}",
+            "legendFormat": "{{queue}}",
+            "interval": "15s"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "min": 0,
+            "custom": {
+              "spanNulls": true,
+              "lineInterpolation": "smooth",
+              "showPoints": "never"
+            }
+          }
+        }
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "environment",
+          "type": "constant",
+          "label": "Environment",
+          "query": "production",
+          "current": {"text": "production", "value": "production"}
+        }
+      ]
+    },
+    "annotations": {
+      "list": [
+        {
+          "name": "Deployments",
+          "type": "dashboard",
+          "builtIn": 1,
+          "datasource": {"type": "prometheus", "uid": "prometheus"}
+        }
+      ]
+    },
+    "links": [
+      {
+        "title": "PostgreSQL Dashboard",
+        "type": "dashboards",
+        "tags": ["postgres"]
+      },
+      {
+        "title": "Infrastructure Dashboard",
+        "type": "dashboards",
+        "tags": ["infra"]
+      }
+    ],
+    "tags": ["services", "go", "microservices", "coding-challange"],
+    "schemaVersion": 39,
+    "version": 1,
+    "gnetId": null
+  }
+}

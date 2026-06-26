@@ -1,0 +1,113 @@
+id: "word-break"
+title: "Word Break"
+type: "function"
+difficulty: "medium"
+category: "string"
+tags: ["dp", "string", "hash-map"]
+
+description: |
+  Given a string `s` and a dictionary of strings `wordDict`, return `true` if
+  `s` can be segmented into a space-separated sequence of one or more dictionary
+  words.
+
+  Note that the same word in the dictionary may be reused multiple times in the
+  segmentation.
+
+function_name: "wordBreak"
+parameters:
+  - name: "s"
+    type: "string"
+    description: "Input string to segment"
+  - name: "wordDict"
+    type: "[]string"
+    description: "Dictionary of valid words"
+return_type: "bool"
+
+examples:
+  - input: 's = "leetcode", wordDict = ["leet","code"]'
+    output: "true"
+    explanation: '"leetcode" can be segmented as "leet code".'
+  - input: 's = "applepenapple", wordDict = ["apple","pen"]'
+    output: "true"
+    explanation: '"applepenapple" can be segmented as "apple pen apple".'
+  - input: 's = "catsandog", wordDict = ["cats","dog","sand","and","cat"]'
+    output: "false"
+    explanation: 'No valid segmentation exists for "catsandog".'
+
+hints:
+  - level: 1
+    title: "Dynamic programming"
+    content: "Think about building from smaller prefixes. Can the first i characters be segmented?"
+  - level: 2
+    title: "DP definition"
+    content: "Define dp[i] = true if s[0:i] can be segmented. For each i, check every word in wordDict that matches the suffix."
+  - level: 3
+    title: "Bottom-up approach"
+    content: |
+      Convert wordDict to a map[string]bool for O(1) lookups.
+      dp[0] = true (empty string is always valid).
+      For i from 1 to len(s):
+        For each word in wordDict:
+          If i >= len(word) AND s[i-len(word):i] == word AND dp[i-len(word)]:
+            dp[i] = true, break early.
+      Return dp[len(s)].
+
+template: |
+  func wordBreak(s string, wordDict []string) bool {
+      // Your code here
+      // Hint: Use DP with a hash set for fast lookup
+      return false
+  }
+
+test_cases:
+  - params: ["leetcode", ["leet", "code"]]
+    expected: true
+    description: "Concatenation of two words"
+  - params: ["applepenapple", ["apple", "pen"]]
+    expected: true
+    description: "Repeated word usage"
+  - params: ["catsandog", ["cats", "dog", "sand", "and", "cat"]]
+    expected: false
+    description: "Impossible segmentation"
+  - params: ["", ["a"]]
+    expected: true
+    description: "Empty string is always valid"
+  - params: ["aaaaaaa", ["aaaa", "aaa"]]
+    expected: true
+    description: "Overlapping words"
+  - params: ["a", []]
+    expected: false
+    description: "Empty dictionary with non-empty string"
+
+constraints:
+  - "1 ≤ len(s) ≤ 300"
+  - "1 ≤ len(wordDict) ≤ 1000"
+  - "1 ≤ len(wordDict[i]) ≤ 20"
+  - "s and wordDict[i] consist of only lowercase English letters."
+  - "All strings in wordDict are unique."
+
+time_complexity_hint: "O(n × m × k)"
+space_complexity_hint: "O(n)"
+
+solution:
+  code: |
+    func wordBreak(s string, wordDict []string) bool {
+        dict := make(map[string]bool, len(wordDict))
+        for _, w := range wordDict {
+            dict[w] = true
+        }
+        dp := make([]bool, len(s)+1)
+        dp[0] = true
+        for i := 1; i <= len(s); i++ {
+            for j := 0; j < i; j++ {
+                if dp[j] && dict[s[j:i]] {
+                    dp[i] = true
+                    break
+                }
+            }
+        }
+        return dp[len(s)]
+    }
+  approach: "Bottom-up dynamic programming with hash set"
+  time_complexity: "O(n × m)"
+  space_complexity: "O(n)"

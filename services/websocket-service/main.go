@@ -107,13 +107,22 @@ func main() {
 	go srv.wsHub.Run()
 
 	// Start Redis subscriber for cross-service messaging
+	var redisSubCtx context.Context
+	var redisSubCancel context.CancelFunc
 	if redisClient != nil {
-		go srv.startRedisSubscriber()
+		redisSubCtx, redisSubCancel = context.WithCancel(context.Background())
+		go srv.startRedisSubscriber(redisSubCtx)
 	}
 
 	// Start HTTP server
 	port := getEnv("PORT", ServicePort)
 	srv.start(port)
+
+	// Stop background goroutines on shutdown
+	srv.wsHub.Stop()
+	if redisSubCancel != nil {
+		redisSubCancel()
+	}
 }
 
 // setupRoutes configures all HTTP and WebSocket routes.
@@ -155,14 +164,14 @@ func (s *Server) healthCheck(c *gin.Context) {
 
 	if s.db != nil {
 		if err := s.db.HealthCheck(ctx); err != nil {
-			dbStatus = "error: " + err.Error()
+			dbStatus = "unavailable"
 			status = "degraded"
 		}
 	}
 
 	if s.redis != nil {
 		if err := s.redis.HealthCheck(ctx); err != nil {
-			redisStatus = "error: " + err.Error()
+			redisStatus = "unavailable"
 			status = "degraded"
 		}
 	}
@@ -285,8 +294,7 @@ func (s *Server) handleInternalRoomNotify(c *gin.Context) {
 }
 
 // startRedisSubscriber subscribes to Redis pub/sub channels for cross-service messaging.
-func (s *Server) startRedisSubscriber() {
-	ctx := context.Background()
+func (s *Server) startRedisSubscriber(ctx context.Context) {
 	ch := s.redis.Subscribe(ctx, "submission:result", "leaderboard:update", "notification:broadcast")
 
 	for msg := range ch {

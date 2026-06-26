@@ -4,12 +4,15 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
+
+	pkgmiddleware "coding-challange/pkg/middleware"
 )
 
 // CacheEntry represents a cached response
@@ -24,6 +27,7 @@ type InMemoryCache struct {
 	mu      sync.RWMutex
 	entries map[string]*CacheEntry
 	ttl     time.Duration
+	done    chan struct{}
 }
 
 // NewInMemoryCache creates a new cache with the specified TTL
@@ -31,10 +35,16 @@ func NewInMemoryCache(ttl time.Duration) *InMemoryCache {
 	cache := &InMemoryCache{
 		entries: make(map[string]*CacheEntry),
 		ttl:     ttl,
+		done:    make(chan struct{}),
 	}
 	// Start cleanup goroutine
 	go cache.cleanup()
 	return cache
+}
+
+// StopCleanup stops the background cleanup goroutine.
+func (c *InMemoryCache) StopCleanup() {
+	close(c.done)
 }
 
 // Get retrieves a cached entry if it exists and is not expired
@@ -85,18 +95,28 @@ func (c *InMemoryCache) Clear() {
 
 // cleanup periodically removes expired entries
 func (c *InMemoryCache) cleanup() {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[RECOVER] InMemoryCache cleanup panic: %v", r)
+		}
+	}()
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		c.mu.Lock()
-		now := time.Now()
-		for key, entry := range c.entries {
-			if now.Sub(entry.Timestamp) > c.ttl {
-				delete(c.entries, key)
+	for {
+		select {
+		case <-c.done:
+			return
+		case <-ticker.C:
+			c.mu.Lock()
+			now := time.Now()
+			for key, entry := range c.entries {
+				if now.Sub(entry.Timestamp) > c.ttl {
+					delete(c.entries, key)
+				}
 			}
+			c.mu.Unlock()
 		}
-		c.mu.Unlock()
 	}
 }
 
@@ -167,39 +187,14 @@ func (r *responseRecorder) Write(p []byte) (int, error) {
 	return r.ResponseWriter.Write(p)
 }
 
-// SecurityHeaders adds security-related HTTP headers
+// SecurityHeaders adds security-related HTTP headers using the shared
+// implementation from pkg/middleware.
 func SecurityHeaders() gin.HandlerFunc {
+	headers := pkgmiddleware.SecurityHeaders()
 	return func(c *gin.Context) {
-		// Content Security Policy
-		c.Header("Content-Security-Policy",
-			"default-src 'self'; "+
-				"script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; "+
-				"style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "+
-				"font-src 'self' https://fonts.gstatic.com; "+
-				"img-src 'self' data:; "+
-				"connect-src 'self'; "+
-				"frame-ancestors 'none'; "+
-				"base-uri 'self'; "+
-				"form-action 'self';")
-
-		// Prevent MIME type sniffing
-		c.Header("X-Content-Type-Options", "nosniff")
-
-		// XSS Protection
-		c.Header("X-XSS-Protection", "1; mode=block")
-
-		// Referrer Policy
-		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
-
-		// Permissions Policy
-		c.Header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
-
-		// Strict Transport Security (for HTTPS)
-		c.Header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
-
-		// Frame Options
-		c.Header("X-Frame-Options", "DENY")
-
+		for key, value := range headers {
+			c.Header(key, value)
+		}
 		c.Next()
 	}
 }

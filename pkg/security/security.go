@@ -9,8 +9,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	"net"
-	"net/http"
 	"regexp"
 	"strings"
 	"sync"
@@ -309,36 +307,6 @@ func SanitizeSQLInput(input string) string {
 }
 
 // ============================================================================
-// XSS Prevention Headers
-// ============================================================================
-
-// XSSHeaders returns security headers to prevent XSS attacks.
-func XSSHeaders() map[string]string {
-	return map[string]string{
-		"X-Content-Type-Options":    "nosniff",
-		"X-Frame-Options":           "DENY",
-		"X-XSS-Protection":          "1; mode=block",
-		"Referrer-Policy":           "strict-origin-when-cross-origin",
-		"Content-Security-Policy":   "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
-		"Permissions-Policy":        "camera=(), microphone=(), geolocation=(), payment=()",
-		"Strict-Transport-Security": "max-age=31536000; includeSubDomains",
-	}
-}
-
-// SecureHeadersMiddleware returns an HTTP middleware that adds security headers.
-func SecureHeadersMiddleware() func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			headers := XSSHeaders()
-			for key, value := range headers {
-				w.Header().Set(key, value)
-			}
-			next.ServeHTTP(w, r)
-		})
-	}
-}
-
-// ============================================================================
 // CSRF Token Generation
 // ============================================================================
 
@@ -366,152 +334,18 @@ func ValidateCSRFToken(token, expected string) bool {
 }
 
 // ============================================================================
-// IP-Based Rate Limiting
+// Helper: context key type for storing security context
 // ============================================================================
 
-// IPRateLimiter implements IP-based rate limiting using token bucket.
-type IPRateLimiter struct {
-	mu        sync.RWMutex
-	visitors  map[string]*IPRateLimit
-	rate      float64   // tokens per second
-	burst     int       // bucket capacity
-	blockDuration time.Duration
-}
-
-// IPRateLimit tracks rate limiting for an IP.
-type IPRateLimit struct {
-	tokens        float64
-	lastVisit     time.Time
-	blocked       bool
-	blockExpiry   time.Time
-	violationCount int
-}
-
-// NewIPRateLimiter creates a new IP-based rate limiter.
-func NewIPRateLimiter(rate float64, burst int, blockDuration time.Duration) *IPRateLimiter {
-	rl := &IPRateLimiter{
-		visitors:      make(map[string]*IPRateLimit),
-		rate:          rate,
-		burst:         burst,
-		blockDuration: blockDuration,
-	}
-
-	go rl.cleanup()
-	return rl
-}
-
-// Allow checks if a request from an IP is allowed.
-func (rl *IPRateLimiter) Allow(ip string) bool {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-
-	now := time.Now()
-
-	// Extract IP without port
-	if host, _, err := net.SplitHostPort(ip); err == nil {
-		ip = host
-	}
-
-	v, exists := rl.visitors[ip]
-	if !exists {
-		rl.visitors[ip] = &IPRateLimit{
-			tokens:    float64(rl.burst),
-			lastVisit: now,
-		}
-		return true
-	}
-
-	// Check if blocked
-	if v.blocked {
-		if now.After(v.blockExpiry) {
-			v.blocked = false
-			v.tokens = float64(rl.burst)
-			v.violationCount = 0
-		} else {
-			return false
-		}
-	}
-
-	// Refill tokens based on time elapsed
-	elapsed := now.Sub(v.lastVisit).Seconds()
-	v.tokens += elapsed * rl.rate
-	if v.tokens > float64(rl.burst) {
-		v.tokens = float64(rl.burst)
-	}
-	v.lastVisit = now
-
-	// Consume a token
-	if v.tokens >= 1 {
-		v.tokens--
-		return true
-	}
-
-	// Block the IP if tokens exhausted
-	v.violationCount++
-	if v.violationCount >= rl.burst {
-		v.blocked = true
-		v.blockExpiry = now.Add(rl.blockDuration)
-	}
-
-	return false
-}
-
-// GetStatus returns the rate limiter status for an IP.
-func (rl *IPRateLimiter) GetStatus(ip string) map[string]interface{} {
-	rl.mu.RLock()
-	defer rl.mu.RUnlock()
-
-	if host, _, err := net.SplitHostPort(ip); err == nil {
-		ip = host
-	}
-
-	v, exists := rl.visitors[ip]
-	if !exists {
-		return map[string]interface{}{
-			"blocked": false,
-			"tokens":  rl.burst,
-		}
-	}
-
-	return map[string]interface{}{
-		"blocked":         v.blocked,
-			"tokens":          v.tokens,
-			"violation_count": v.violationCount,
-			"block_expiry":    v.blockExpiry,
-		}
-}
-
-// cleanup removes stale entries periodically.
-func (rl *IPRateLimiter) cleanup() {
-	ticker := time.NewTicker(1 * time.Minute)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		rl.mu.Lock()
-		now := time.Now()
-		for ip, v := range rl.visitors {
-			if now.Sub(v.lastVisit) > 10*time.Minute {
-				delete(rl.visitors, ip)
-			}
-		}
-		rl.mu.Unlock()
-	}
-}
-
-// ============================================================================
-// Suspicious Activity Detection
-// ============================================================================
-
-// SuspiciousActivityType represents types of suspicious activities.
+// SuspiciousActivityType represents the type of suspicious activity detected.
 type SuspiciousActivityType string
 
 const (
-	ActivityBruteForce     SuspiciousActivityType = "brute_force"
-	ActivitySQLInjection   SuspiciousActivityType = "sql_injection"
-	ActivityXSSAttempt     SuspiciousActivityType = "xss_attempt"
-	ActivityPathTraversal  SuspiciousActivityType = "path_traversal"
-	ActivityRateViolation  SuspiciousActivityType = "rate_violation"
-	ActivityImpossibleTravel SuspiciousActivityType = "impossible_travel"
+	ActivityBruteForce    SuspiciousActivityType = "brute_force"
+	ActivitySQLInjection  SuspiciousActivityType = "sql_injection"
+	ActivityXSS           SuspiciousActivityType = "xss"
+	ActivityPathTraversal SuspiciousActivityType = "path_traversal"
+	ActivityRateLimit     SuspiciousActivityType = "rate_limit"
 )
 
 // SuspiciousEvent represents a detected suspicious activity.
@@ -519,19 +353,19 @@ type SuspiciousEvent struct {
 	Type      SuspiciousActivityType `json:"type"`
 	IP        string                 `json:"ip"`
 	UserID    string                 `json:"user_id,omitempty"`
-	Timestamp time.Time              `json:"timestamp"`
 	Details   string                 `json:"details"`
-	Severity  string                 `json:"severity"` // "low", "medium", "high", "critical"
+	Severity  string                 `json:"severity"`
 	Meta      map[string]interface{} `json:"meta,omitempty"`
+	Timestamp time.Time              `json:"timestamp"`
 }
 
-// SuspiciousActivityDetector detects suspicious activities.
+// SuspiciousActivityDetector monitors and detects suspicious activities.
 type SuspiciousActivityDetector struct {
-	mu             sync.RWMutex
-	events         []SuspiciousEvent
-	loginAttempts  map[string][]time.Time // IP -> timestamps of recent login failures
-	ipActivity    map[string]map[SuspiciousActivityType]int // IP -> activity -> count
-	onDetection    func(SuspiciousEvent)
+	mu            sync.RWMutex
+	events        []SuspiciousEvent
+	loginAttempts map[string][]time.Time
+	ipActivity    map[string]map[SuspiciousActivityType]int
+	onDetection   func(SuspiciousEvent)
 }
 
 // NewSuspiciousActivityDetector creates a new activity detector.
@@ -567,7 +401,7 @@ func (d *SuspiciousActivityDetector) RecordLoginFailure(ip, userID string) {
 
 	// Detect brute force (> 10 failures in 15 minutes)
 	if len(d.loginAttempts[ip]) > 10 {
-		d.recordEvent(SuspiciousEvent{
+		d.recordEventLocked(SuspiciousEvent{
 			Type:      ActivityBruteForce,
 			IP:        ip,
 			UserID:    userID,
@@ -598,7 +432,7 @@ func (d *SuspiciousActivityDetector) RecordSQLInjectionAttempt(ip, input string)
 		severity = "high"
 	}
 
-	d.recordEvent(SuspiciousEvent{
+	d.recordEventLocked(SuspiciousEvent{
 		Type:      ActivitySQLInjection,
 		IP:        ip,
 		Timestamp: now,
@@ -616,8 +450,8 @@ func (d *SuspiciousActivityDetector) RecordXSSEvent(ip, input string) {
 	if d.ipActivity[ip] == nil {
 		d.ipActivity[ip] = make(map[SuspiciousActivityType]int)
 	}
-	d.ipActivity[ip][ActivityXSSAttempt]++
-	count := d.ipActivity[ip][ActivityXSSAttempt]
+	d.ipActivity[ip][ActivityXSS]++
+	count := d.ipActivity[ip][ActivityXSS]
 	d.mu.Unlock()
 
 	severity := "low"
@@ -627,8 +461,8 @@ func (d *SuspiciousActivityDetector) RecordXSSEvent(ip, input string) {
 		severity = "medium"
 	}
 
-	d.recordEvent(SuspiciousEvent{
-		Type:      ActivityXSSAttempt,
+	d.recordEventLocked(SuspiciousEvent{
+		Type:      ActivityXSS,
 		IP:        ip,
 		Timestamp: time.Now(),
 		Details:   fmt.Sprintf("XSS attempt detected (attempt #%d)", count),
@@ -638,7 +472,7 @@ func (d *SuspiciousActivityDetector) RecordXSSEvent(ip, input string) {
 
 // RecordPathTraversal records a path traversal attempt.
 func (d *SuspiciousActivityDetector) RecordPathTraversal(ip, path string) {
-	d.recordEvent(SuspiciousEvent{
+	d.recordEventLocked(SuspiciousEvent{
 		Type:      ActivityPathTraversal,
 		IP:        ip,
 		Timestamp: time.Now(),
@@ -651,10 +485,10 @@ func (d *SuspiciousActivityDetector) RecordPathTraversal(ip, path string) {
 func (d *SuspiciousActivityDetector) RecordEvent(event SuspiciousEvent) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	d.recordEvent(event)
+	d.recordEventLocked(event)
 }
 
-func (d *SuspiciousActivityDetector) recordEvent(event SuspiciousEvent) {
+func (d *SuspiciousActivityDetector) recordEventLocked(event SuspiciousEvent) {
 	d.events = append(d.events, event)
 	if len(d.events) > 10000 {
 		d.events = d.events[len(d.events)-10000:]
@@ -687,7 +521,7 @@ func (d *SuspiciousActivityDetector) GetIPRiskScore(ip string) int {
 			score += count * 20
 		case ActivityBruteForce:
 			score += count * 15
-		case ActivityXSSAttempt:
+		case ActivityXSS:
 			score += count * 10
 		case ActivityPathTraversal:
 			score += count * 25
@@ -918,17 +752,13 @@ func TOTPProvisioningURI(secret, username, issuer string) string {
 // Helper: context key type for storing security context
 // ============================================================================
 
-type contextKey string
-
-const ContextKeySecurityInfo contextKey = "security_info"
 
 // SecurityInfo holds security-related context information.
 type SecurityInfo struct {
-	IP          string
-	UserAgent   string
-	RequestID   string
-	RateLimited bool
-	RiskScore   int
+	IP        string
+	UserAgent string
+	RequestID string
+	RiskScore int
 }
 
 // ============================================================================

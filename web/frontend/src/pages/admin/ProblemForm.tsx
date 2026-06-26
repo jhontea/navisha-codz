@@ -9,7 +9,6 @@ import {
   EyeOff,
   ToggleLeft,
   ToggleRight,
-  GripVertical,
   ChevronDown,
   ChevronUp,
   Lightbulb,
@@ -17,14 +16,10 @@ import {
   Code2,
   FileText,
   AlertCircle,
-  Check,
 } from "lucide-react";
-import Editor, { OnMount } from "@monaco-editor/react";
-import type { editor } from "monaco-editor";
-import * as monaco from "monaco-editor";
-import type { Difficulty, Category, TestCase, Hint } from "../../types";
+import Editor from "@monaco-editor/react";
+import type { Difficulty, Category, TestCase } from "../../types";
 import { Button } from "../../components/ui/Button";
-import { Input } from "../../components/ui/Input";
 import { CATEGORY_LIST } from "../../components/problem/CategoryIcon";
 
 // ── Types ───────────────────────────────────────────────────────────────────

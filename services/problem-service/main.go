@@ -59,17 +59,16 @@ type TestCase struct {
 type ProblemFilters struct {
 	Difficulty string `form:"difficulty"`
 	CategoryID int    `form:"category_id"`
-	Page       int    `form:"page"`
-	PageSize   int    `form:"page_size"`
+	Limit      int    `form:"limit"`
+	Cursor     string `form:"cursor"`
 	Search     string `form:"search"`
 }
 
-type PaginatedResponse struct {
+type CursorResponse struct {
 	Data       interface{} `json:"data"`
+	NextCursor string      `json:"next_cursor,omitempty"`
+	HasMore    bool        `json:"has_more"`
 	Total      int         `json:"total"`
-	Page       int         `json:"page"`
-	PageSize   int         `json:"page_size"`
-	TotalPages int         `json:"total_pages"`
 }
 
 // Server holds all dependencies.
@@ -107,13 +106,24 @@ func main() {
 	srv.router.Use(middleware.RequestIDMiddleware())
 	srv.router.Use(middleware.LoggerMiddleware())
 	srv.router.Use(middleware.CORSMiddleware())
+	srv.router.Use(middleware.GzipMiddleware())
+	srv.router.Use(middleware.RequestValidationMiddleware(middleware.DefaultRequestValidationConfig()))
 
 	// Register routes
 	srv.setupRoutes()
 
+	// Cache warming: pre-populate first page of problem list
+	warmCtx, warmCancel := context.WithCancel(context.Background())
+	if redisClient != nil {
+		go srv.warmCache(warmCtx)
+	}
+
 	// Start server
 	port := getEnv("PORT", ServicePort)
 	runServer(srv, port)
+
+	// Stop cache warming goroutine on shutdown
+	warmCancel()
 }
 
 func (s *Server) setupRoutes() {
@@ -143,7 +153,7 @@ func (s *Server) healthCheck(c *gin.Context) {
 	dbStatus := "ok"
 
 	if err := s.db.HealthCheck(ctx); err != nil {
-		dbStatus = "error: " + err.Error()
+		dbStatus = "unavailable"
 		status = "degraded"
 	}
 
@@ -155,7 +165,104 @@ func (s *Server) healthCheck(c *gin.Context) {
 	})
 }
 
-// listProblems handles GET /api/problems with filters and pagination.
+// warmCache pre-populates the Redis cache with common problem list queries at startup.
+func (s *Server) warmCache(ctx context.Context) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[RECOVER] warmCache panic: %v", r)
+		}
+	}()
+	log.Println("[CACHE WARM] Starting cache warming for problem lists...")
+
+	select {
+	case <-ctx.Done():
+		log.Println("[CACHE WARM] Context cancelled, skipping")
+		return
+	default:
+	}
+
+	// Warm the default first page (no filters)
+	defaultCacheKey := fmt.Sprintf("problems:list::0::20:")
+	if err := s.redis.Get(ctx, defaultCacheKey, &CursorResponse{}); err != nil {
+		// Manually execute query to populate cache
+		query := `
+			SELECT 
+				p.id, p.title, p.slug, p.difficulty, p.max_score,
+				pc.name AS category_name,
+				COALESCE(sub_stats.total_submissions, 0) AS total_submissions,
+				COALESCE(sub_stats.accepted_submissions, 0) AS accepted_submissions,
+				CASE WHEN COALESCE(sub_stats.total_submissions, 0) > 0 
+					THEN ROUND(sub_stats.accepted_submissions * 100.0 / sub_stats.total_submissions, 2)
+					ELSE 0 
+				END AS success_rate
+			FROM problems p
+			JOIN problem_categories pc ON p.category_id = pc.id
+			LEFT JOIN (
+				SELECT problem_id,
+					COUNT(*) AS total_submissions,
+					COUNT(*) FILTER (WHERE status = 'accepted') AS accepted_submissions
+				FROM submissions
+				GROUP BY problem_id
+			) sub_stats ON p.id = sub_stats.problem_id
+			WHERE p.is_published = TRUE
+			ORDER BY p.difficulty, p.title
+			LIMIT 21
+		`
+		rows, err := s.db.Query(ctx, query)
+		if err != nil {
+			log.Printf("[CACHE WARM] Query failed: %v", err)
+			return
+		}
+		defer rows.Close()
+
+		var problems []Problem
+		for rows.Next() {
+			var p Problem
+			if err := rows.Scan(&p.ID, &p.Title, &p.Slug, &p.Difficulty, &p.MaxScore,
+				&p.CategoryName, &p.TotalSubmissions, &p.AcceptedSubmissions, &p.SuccessRate); err != nil {
+				continue
+			}
+			problems = append(problems, p)
+		}
+
+		hasMore := len(problems) > 20
+		nextCursor := ""
+		if hasMore {
+			nextCursor = fmt.Sprintf("%d", problems[19].ID)
+			problems = problems[:20]
+		}
+
+		var totalCount int
+		_ = s.db.QueryRow(ctx, `SELECT COUNT(*) FROM problems WHERE is_published = TRUE`).Scan(&totalCount)
+
+		response := CursorResponse{
+			Data:       problems,
+			NextCursor: nextCursor,
+			HasMore:    hasMore,
+			Total:      totalCount,
+		}
+
+		if err := s.redis.Set(ctx, defaultCacheKey, response, 5*time.Minute); err != nil {
+			log.Printf("[CACHE WARM] Failed to cache default list: %v", err)
+		} else {
+			log.Printf("[CACHE WARM] Cached default problem list (%d problems)", len(problems))
+		}
+	}
+
+	// Warm by difficulty
+	difficulties := []string{"easy", "medium", "hard"}
+	for _, diff := range difficulties {
+		cacheKey := fmt.Sprintf("problems:list:%s:0::20:", diff)
+		if err := s.redis.Get(ctx, cacheKey, &CursorResponse{}); err != nil {
+			_ = s.redis.Set(ctx, cacheKey, CursorResponse{Data: []Problem{}, Total: 0}, 5*time.Minute)
+			log.Printf("[CACHE WARM] Seeded cache key: %s", cacheKey)
+		}
+	}
+
+	log.Println("[CACHE WARM] Cache warming completed")
+}
+
+// listProblems handles GET /api/problems with filters and cursor-based pagination.
 func (s *Server) listProblems(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -166,65 +273,87 @@ func (s *Server) listProblems(c *gin.Context) {
 	}
 
 	// Set defaults
-	if filters.Page < 1 {
-		filters.Page = 1
-	}
-	if filters.PageSize < 1 || filters.PageSize > 100 {
-		filters.PageSize = 20
+	if filters.Limit < 1 || filters.Limit > 100 {
+		filters.Limit = 20
 	}
 
 	// Try cache first
-	cacheKey := fmt.Sprintf("problems:list:%s:%d:%d:%s:%d",
-		filters.Difficulty, filters.CategoryID, filters.Page, filters.Search, filters.PageSize)
+	cacheKey := fmt.Sprintf("problems:list:%s:%d:%s:%d:%s",
+		filters.Difficulty, filters.CategoryID, filters.Search, filters.Limit, filters.Cursor)
 	if s.redis != nil {
-		var cached PaginatedResponse
+		var cached CursorResponse
 		if err := s.redis.Get(ctx, cacheKey, &cached); err == nil {
 			c.JSON(http.StatusOK, cached)
 			return
 		}
 	}
 
-	// Build query
+	// Build cursor-based query (keyset pagination instead of OFFSET)
+	countQuery := `
+		SELECT COUNT(*) FROM (
+			SELECT p.id
+			FROM problems p
+			JOIN problem_categories pc ON p.category_id = pc.id
+			WHERE p.is_published = TRUE
+	`
 	query := `
 		SELECT 
 			p.id, p.title, p.slug, p.difficulty, p.max_score,
 			pc.name AS category_name,
-			COUNT(s.id) AS total_submissions,
-			COUNT(s.id) FILTER (WHERE s.status = 'accepted') AS accepted_submissions,
-			CASE WHEN COUNT(s.id) > 0 
-				THEN ROUND(COUNT(s.id) FILTER (WHERE s.status = 'accepted') * 100.0 / COUNT(s.id), 2)
+			COALESCE(sub_stats.total_submissions, 0) AS total_submissions,
+			COALESCE(sub_stats.accepted_submissions, 0) AS accepted_submissions,
+			CASE WHEN COALESCE(sub_stats.total_submissions, 0) > 0 
+				THEN ROUND(sub_stats.accepted_submissions * 100.0 / sub_stats.total_submissions, 2)
 				ELSE 0 
-			END AS success_rate,
-			COUNT(*) OVER() AS total_count
+			END AS success_rate
 		FROM problems p
 		JOIN problem_categories pc ON p.category_id = pc.id
-		LEFT JOIN problem_tags pt ON p.id = pt.problem_id
-		LEFT JOIN submissions s ON p.id = s.problem_id
+		LEFT JOIN (
+			SELECT problem_id,
+				COUNT(*) AS total_submissions,
+				COUNT(*) FILTER (WHERE status = 'accepted') AS accepted_submissions
+			FROM submissions
+			GROUP BY problem_id
+		) sub_stats ON p.id = sub_stats.problem_id
 		WHERE p.is_published = TRUE
 	`
 	args := []interface{}{}
 	argIdx := 1
 
 	if filters.Difficulty != "" {
-		query += fmt.Sprintf(" AND p.difficulty = $%d", argIdx)
+		clause := fmt.Sprintf(" AND p.difficulty = $%d", argIdx)
+		query += clause
+		countQuery += clause
 		args = append(args, filters.Difficulty)
 		argIdx++
 	}
 	if filters.CategoryID > 0 {
-		query += fmt.Sprintf(" AND p.category_id = $%d", argIdx)
+		clause := fmt.Sprintf(" AND p.category_id = $%d", argIdx)
+		query += clause
+		countQuery += clause
 		args = append(args, filters.CategoryID)
 		argIdx++
 	}
 	if filters.Search != "" {
-		query += fmt.Sprintf(" AND (p.title ILIKE $%d OR p.slug ILIKE $%d)", argIdx, argIdx)
+		clause := fmt.Sprintf(" AND (p.title ILIKE $%d OR p.slug ILIKE $%d)", argIdx, argIdx)
+		query += clause
+		countQuery += clause
 		args = append(args, "%"+filters.Search+"%")
 		argIdx++
 	}
 
-	query += " GROUP BY p.id, pc.name"
+	countQuery += " ) cnt"
+
+	// Add cursor condition (keyset pagination) for the query only
+	if filters.Cursor != "" {
+		query += fmt.Sprintf(" AND (p.difficulty, p.title) > (SELECT p2.difficulty, p2.title FROM problems p2 WHERE p2.id = $%d)", argIdx)
+		args = append(args, filters.Cursor)
+		argIdx++
+	}
+
 	query += " ORDER BY p.difficulty, p.title"
-	query += fmt.Sprintf(" LIMIT $%d OFFSET $%d", argIdx, argIdx+1)
-	args = append(args, filters.PageSize, (filters.Page-1)*filters.PageSize)
+	query += fmt.Sprintf(" LIMIT $%d", argIdx)
+	args = append(args, filters.Limit+1) // Fetch one extra to detect HasMore
 
 	rows, err := s.db.Query(ctx, query, args...)
 	if err != nil {
@@ -235,29 +364,39 @@ func (s *Server) listProblems(c *gin.Context) {
 	defer rows.Close()
 
 	var problems []Problem
-	var totalCount int
+	nextCursor := ""
 	for rows.Next() {
 		var p Problem
 		if err := rows.Scan(&p.ID, &p.Title, &p.Slug, &p.Difficulty, &p.MaxScore,
-			&p.CategoryName, &p.TotalSubmissions, &p.AcceptedSubmissions, &p.SuccessRate, &totalCount); err != nil {
+			&p.CategoryName, &p.TotalSubmissions, &p.AcceptedSubmissions, &p.SuccessRate); err != nil {
 			log.Printf("Failed to scan problem: %v", err)
 			continue
 		}
 		problems = append(problems, p)
 	}
 
-	totalPages := (totalCount + filters.PageSize - 1) / filters.PageSize
-	response := PaginatedResponse{
-		Data:       problems,
-		Total:      totalCount,
-		Page:       filters.Page,
-		PageSize:   filters.PageSize,
-		TotalPages: totalPages,
+	hasMore := len(problems) > filters.Limit
+	if hasMore {
+		// Remove the extra item
+		lastItem := problems[len(problems)-2]
+		nextCursor = fmt.Sprintf("%d", lastItem.ID)
+		problems = problems[:filters.Limit]
 	}
 
-	// Cache response
+	// Get total count
+	var totalCount int
+	_ = s.db.QueryRow(ctx, countQuery, args[:len(args)-1]...).Scan(&totalCount)
+
+	response := CursorResponse{
+		Data:       problems,
+		NextCursor: nextCursor,
+		HasMore:    hasMore,
+		Total:      totalCount,
+	}
+
+	// Cache response with TTL 5 minutes
 	if s.redis != nil {
-		_ = s.redis.Set(ctx, cacheKey, response, redis.TTLProblemList)
+		_ = s.redis.Set(ctx, cacheKey, response, 5*time.Minute)
 	}
 
 	c.JSON(http.StatusOK, response)
@@ -414,7 +553,7 @@ func (s *Server) createProblem(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request", "details": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request format"})
 		return
 	}
 

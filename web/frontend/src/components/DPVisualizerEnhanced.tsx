@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useRef, useEffect } from "react";
-import type { DPTableResult, DPStep, DPCell, MemoFrame } from "../types";
+import { useState, useCallback, useRef, useEffect } from "react";
+import type { DPTableResult, DPCell } from "../types";
 import { Play, Pause, SkipBack, SkipForward, ChevronDown, ChevronUp, Download } from "lucide-react";
 
 interface DPVisualizerEnhancedProps {

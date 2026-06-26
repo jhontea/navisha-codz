@@ -93,10 +93,19 @@
 93|
 94|```bash
 95|# Copy file konfigurasi
-96|cp .env.example .env
-97|
-98|# Edit .env jika diperlukan (lihat bagian Konfigurasi)
-99|notepad .env
+cp .env.example .env
+
+# Edit .env jika diperlukan (lihat bagian Konfigurasi)
+notepad .env
+
+# ⚠️ WAJIB: Generate JWT_ACCESS_SECRET dan JWT_REFRESH_SECRET
+# Jangan pernah menggunakan default secret di production!
+# Gunakan perintah berikut untuk generate:
+#   openssl rand -base64 32
+# Atau di PowerShell:
+#   [Convert]::ToBase64String((1..32|%{Get-Random -Max 256}))
+
+notepad .env
 100|```
 101|
 102|---

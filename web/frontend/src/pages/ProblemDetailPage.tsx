@@ -1,23 +1,22 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery } from "react-query";
-import { ArrowLeft, Clock, HardDrive, Star, BookOpen, CheckCircle, Smartphone, Monitor } from "lucide-react";
+import { ArrowLeft, Clock, HardDrive, Star, BookOpen, CheckCircle } from "lucide-react";
 import { problemApi } from "../services/api";
 import { CodeEditor } from "../components/CodeEditor";
-import { PageLoader } from "../components/ui/LoadingSpinner";
+import { ProblemDetailSkeleton } from "../components/ui/LoadingSkeleton";
 import { CategoryIcon } from "../components/problem/CategoryIcon";
 import { queryKeys } from "../hooks/useQueries";
 import { useSubmissionStore } from "../store/submissionStore";
 import { TestResults } from "../components/TestResults";
 import { HintPanel } from "../components/HintPanel";
-import type { Problem } from "../types";
 
 export function ProblemDetailPage() {
   const { slug } = useParams<{ slug: string }>();
   const [code, setCode] = useState("");
-  const [activeTab, setActiveTab] = useState<"description" | "submissions">("description");
-  const [splitView, setSplitView] = useState<"split" | "full">("split");
-  const { isSubmitting } = useSubmissionStore();
+  const [leftTab, setLeftTab] = useState<"description" | "submissions">("description");
+  const [rightTab, setRightTab] = useState<"code" | "results">("code");
+  const { isSubmitting: _isSubmitting } = useSubmissionStore();
 
   const { data: problem, isLoading, error } = useQuery(
     queryKeys.problems.bySlug(slug ?? ""),
@@ -33,7 +32,7 @@ export function ProblemDetailPage() {
     }
   };
 
-  if (isLoading) return <PageLoader />;
+  if (isLoading) return <ProblemDetailSkeleton />;
   if (error || !problem) {
     return (
       <div className="text-center py-12">
@@ -47,7 +46,7 @@ export function ProblemDetailPage() {
 
   return (
     <div className="h-[calc(100vh-8rem)] flex flex-col space-y-3">
-      {/* Back link + mobile view toggle */}
+      {/* Back link */}
       <div className="flex items-center justify-between shrink-0">
         <Link
           to="/problems"
@@ -56,67 +55,99 @@ export function ProblemDetailPage() {
           <ArrowLeft className="w-4 h-4" />
           Back to Problems
         </Link>
-        {/* View mode toggle (mobile) */}
-        <div className="flex items-center gap-1 lg:hidden">
-          <button
-            onClick={() => setSplitView("full")}
-            className={`p-1.5 rounded text-xs ${splitView === "full" ? "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700" : "text-slate-500"}`}
-            aria-label="Full view"
-          >
-            <Smartphone className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => setSplitView("split")}
-            className={`p-1.5 rounded text-xs ${splitView === "split" ? "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700" : "text-slate-500"}`}
-            aria-label="Split view"
-          >
-            <Monitor className="w-4 h-4" />
-          </button>
-        </div>
+      </div>
+
+      {/* Mobile view mode: show either left or right panel */}
+      <div className="flex lg:hidden gap-1 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 p-1 shrink-0">
+        <button
+          onClick={() => setLeftTab("description")}
+          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+            leftTab === "description"
+              ? "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400"
+              : "text-slate-600 dark:text-slate-400"
+          }`}
+          aria-selected={leftTab === "description"}
+          role="tab"
+          style={{ minHeight: "40px" }}
+        >
+          <BookOpen className="w-4 h-4" />
+          <span className="sm:hidden">Problem</span>
+          <span className="hidden sm:inline">Description</span>
+        </button>
+        <button
+          onClick={() => { setRightTab("code"); setLeftTab("description"); }}
+          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+            rightTab === "code"
+              ? "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400"
+              : "text-slate-600 dark:text-slate-400"
+          }`}
+          aria-selected={rightTab === "code"}
+          role="tab"
+          style={{ minHeight: "40px" }}
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
+          <span>Code</span>
+        </button>
+        <button
+          onClick={() => { setRightTab("results"); setLeftTab("description"); }}
+          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+            rightTab === "results"
+              ? "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400"
+              : "text-slate-600 dark:text-slate-400"
+          }`}
+          aria-selected={rightTab === "results"}
+          role="tab"
+          style={{ minHeight: "40px" }}
+        >
+          <CheckCircle className="w-4 h-4" />
+          <span>Results</span>
+        </button>
       </div>
 
       {/* Two-panel layout */}
-      <div className={`flex-1 flex flex-col lg:flex-row gap-4 overflow-hidden ${splitView === "full" ? "lg:flex-col" : ""}`}>
-        {/* Left panel — Problem info */}
-        <div className={`flex flex-col overflow-y-auto space-y-3 ${splitView === "full" ? "lg:max-h-[40vh]" : "lg:w-1/2"}`}>
-          {/* Tabs */}
-          <div className="flex gap-1 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 p-1">
+      <div className="flex-1 flex flex-col lg:flex-row gap-4 overflow-hidden">
+        {/* Left panel — Problem info (hidden on mobile when right tab is active) */}
+        <div className={`flex flex-col overflow-y-auto space-y-3 lg:w-1/2 ${
+          leftTab === "description" ? "flex" : "hidden lg:flex"
+        }`}>
+          {/* Tabs for left panel */}
+          <div className="hidden lg:flex gap-1 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 p-1">
             <button
-              onClick={() => setActiveTab("description")}
+              onClick={() => setLeftTab("description")}
               className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                activeTab === "description"
+                leftTab === "description"
                   ? "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400"
                   : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
               }`}
-              aria-selected={activeTab === "description"}
+              aria-selected={leftTab === "description"}
               role="tab"
               style={{ minHeight: "40px" }}
             >
               <BookOpen className="w-4 h-4" />
-              <span className="hidden sm:inline">Description</span>
+              <span>Description</span>
             </button>
             <button
-              onClick={() => setActiveTab("submissions")}
+              onClick={() => setLeftTab("submissions")}
               className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === "submissions"
-                ? "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                leftTab === "submissions"
+                  ? "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
               }`}
-              aria-selected={activeTab === "submissions"}
+              aria-selected={leftTab === "submissions"}
               role="tab"
               style={{ minHeight: "40px" }}
             >
               <CheckCircle className="w-4 h-4" />
-              <span className="hidden sm:inline">Submissions</span>
+              <span>Submissions</span>
             </button>
           </div>
 
-          {activeTab === "description" ? (
+          {leftTab === "description" ? (
             <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-4 sm:p-6 space-y-4 sm:space-y-6">
               {/* Title + meta */}
               <div>
                 <div className="flex flex-wrap items-start justify-between gap-2">
-                  <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">{problem.title}</h1>
+                  <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white break-words">{problem.title}</h1>
                   <CategoryIcon category={problem.category} size="md" />
                 </div>
                 <div className="flex flex-wrap items-center gap-2 mt-2">
@@ -149,7 +180,7 @@ export function ProblemDetailPage() {
 
               {/* Description */}
               <div className="prose prose-sm dark:prose-invert max-w-none">
-                <div className="whitespace-pre-wrap text-slate-700 dark:text-slate-300 leading-relaxed text-sm sm:text-base">
+                <div className="whitespace-pre-wrap text-slate-700 dark:text-slate-300 leading-relaxed text-sm sm:text-base break-words">
                   {problem.description}
                 </div>
               </div>
@@ -163,16 +194,16 @@ export function ProblemDetailPage() {
                   <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-3 sm:p-4 space-y-2 font-mono text-xs sm:text-sm">
                     <div>
                       <span className="text-slate-500 dark:text-slate-400 font-sans text-xs font-medium">Input: </span>
-                      <span className="text-slate-800 dark:text-slate-200">{example.input}</span>
+                      <span className="text-slate-800 dark:text-slate-200 break-all">{example.input}</span>
                     </div>
                     <div>
                       <span className="text-slate-500 dark:text-slate-400 font-sans text-xs font-medium">Output: </span>
-                      <span className="text-slate-800 dark:text-slate-200">{example.output}</span>
+                      <span className="text-slate-800 dark:text-slate-200 break-all">{example.output}</span>
                     </div>
                     {example.explanation && (
                       <div className="pt-1 border-t border-slate-200 dark:border-slate-700">
                         <span className="text-slate-500 dark:text-slate-400 font-sans text-xs font-medium">Explanation: </span>
-                        <span className="text-slate-700 dark:text-slate-300 font-sans">{example.explanation}</span>
+                        <span className="text-slate-700 dark:text-slate-300 font-sans break-words">{example.explanation}</span>
                       </div>
                     )}
                   </div>
@@ -185,7 +216,7 @@ export function ProblemDetailPage() {
                   <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-2">Constraints:</h3>
                   <ul className="list-disc list-inside space-y-1 text-sm text-slate-700 dark:text-slate-300">
                     {problem.constraints.map((constraint, idx) => (
-                      <li key={idx}>{constraint}</li>
+                      <li key={idx} className="break-words">{constraint}</li>
                     ))}
                   </ul>
                 </div>
@@ -204,39 +235,29 @@ export function ProblemDetailPage() {
         </div>
 
         {/* Right panel — Code editor + test results */}
-        <div className={`flex flex-col space-y-3 ${splitView === "full" ? "lg:w-full" : "lg:w-1/2"}`}>
-          {/* Mobile tab toggle for code vs results */}
-          <div className="flex lg:hidden gap-1 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 p-1">
-            <button
-              onClick={() => setActiveTab("description")}
-              className={`flex-1 px-3 py-2 rounded-md text-xs font-medium transition-colors ${
-                activeTab === "description"
-                  ? "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700"
-                  : "text-slate-500"
-              }`}
-            >
-              Code
-            </button>
-            <button
-              onClick={() => setActiveTab("submissions")}
-              className={`flex-1 px-3 py-2 rounded-md text-xs font-medium transition-colors ${
-                activeTab === "submissions"
-                  ? "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700"
-                  : "text-slate-500"
-              }`}
-            >
-              Results
-            </button>
-          </div>
+        <div className={`flex flex-col space-y-3 lg:w-1/2 ${
+          rightTab === "code" || rightTab === "results" ? "flex" : "hidden lg:flex"
+        }`}>
+          {/* Only show the code editor when code tab is selected (mobile) or always (desktop) */}
+          {(rightTab === "code" || rightTab !== "results") && (
+            <CodeEditor
+              value={code}
+              onChange={setCode}
+              language="go"
+              template={problem.function_template}
+              onSubmit={handleSubmit}
+            />
+          )}
 
-          <CodeEditor
-            value={code}
-            onChange={setCode}
-            language="go"
-            template={problem.function_template}
-            onSubmit={handleSubmit}
-          />
-          <TestResults />
+          {/* Only show test results when results tab is selected (mobile) or always (desktop) */}
+          {(rightTab === "results") && (
+            <TestResults />
+          )}
+
+          {/* On desktop, show test results below code editor always */}
+          <div className="hidden lg:block">
+            <TestResults />
+          </div>
         </div>
       </div>
     </div>

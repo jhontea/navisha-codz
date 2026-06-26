@@ -1,14 +1,10 @@
-import React, { useState, useMemo, memo } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import React, { memo } from "react";
+import { Link } from "react-router-dom";
 import {
   Users,
   FileCode,
   CheckCircle2,
   Activity,
-  TrendingUp,
-  Clock,
-  Shield,
-  AlertCircle,
   ArrowUpRight,
   ArrowDownRight,
   BarChart3,
@@ -22,8 +18,8 @@ import {
   Code2,
   UserCheck,
   BarChart,
+  Shield,
 } from "lucide-react";
-import { Card } from "../../components/ui/Card";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 
@@ -215,7 +211,7 @@ const SERVER_HEALTH: ServerHealth[] = [
 
 const DashboardStatCard = memo(function DashboardStatCard({
   stat,
-  index,
+  index: _index,
 }: {
   stat: StatCard;
   index: number;
@@ -414,7 +410,6 @@ const ServerHealthCard = memo(function ServerHealthCard({
 // ── Main Dashboard ──────────────────────────────────────────────────────────
 
 export function AdminDashboard() {
-  const navigate = useNavigate();
 
   return (
     <div className="space-y-6">

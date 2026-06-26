@@ -15,7 +15,7 @@ import (
 )
 
 // setupTestRouter creates a gin router with the handler for testing
-func setupTestRouter(t *testing.T) (*gin.Engine, *service.RunnerService) {
+func setupTestRouter(t *testing.T) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 
 	// Create a real repository from test problems
@@ -25,10 +25,9 @@ func setupTestRouter(t *testing.T) (*gin.Engine, *service.RunnerService) {
 	}
 
 	problemSvc := service.NewProblemService(repo)
-	runnerSvc := service.NewRunnerService(30, 256)
 	hintSvc := service.NewHintService()
 
-	handler := NewProblemHandler(problemSvc, runnerSvc, hintSvc)
+	handler := NewProblemHandler(problemSvc, hintSvc)
 
 	router := gin.New()
 	router.GET("/health", handler.HealthCheck)
@@ -38,16 +37,15 @@ func setupTestRouter(t *testing.T) (*gin.Engine, *service.RunnerService) {
 		api.GET("/problems", handler.ListProblems)
 		api.GET("/problems/:id", handler.GetProblem)
 		api.GET("/problems/:id/template", handler.GetTemplate)
-		api.POST("/problems/:id/run", handler.RunCode)
 		api.POST("/validate", handler.ValidateCode)
 		api.GET("/problems/:id/hints", handler.GetHints)
 	}
 
-	return router, runnerSvc
+	return router
 }
 
 func TestHealthCheck(t *testing.T) {
-	router, _ := setupTestRouter(t)
+	router := setupTestRouter(t)
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/health", nil)
@@ -74,7 +72,7 @@ func TestHealthCheck(t *testing.T) {
 }
 
 func TestListProblems_All(t *testing.T) {
-	router, _ := setupTestRouter(t)
+	router := setupTestRouter(t)
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/api/problems", nil)
@@ -93,8 +91,8 @@ func TestListProblems_All(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected data to be array, got %T", resp.Data)
 	}
-	if len(problems) != 10 {
-		t.Errorf("expected 10 problems, got %d", len(problems))
+	if len(problems) != 20 {
+		t.Errorf("expected 20 problems, got %d", len(problems))
 	}
 
 	// Verify summary fields (no solution, no test_cases)
@@ -113,7 +111,7 @@ func TestListProblems_All(t *testing.T) {
 }
 
 func TestListProblems_FilterByDifficulty(t *testing.T) {
-	router, _ := setupTestRouter(t)
+	router := setupTestRouter(t)
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/api/problems?difficulty=easy", nil)
@@ -132,13 +130,13 @@ func TestListProblems_FilterByDifficulty(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected data to be array, got %T", resp.Data)
 	}
-	if len(problems) != 5 {
-		t.Errorf("expected 5 easy problems, got %d", len(problems))
+	if len(problems) != 7 {
+		t.Errorf("expected 7 easy problems, got %d", len(problems))
 	}
 }
 
 func TestListProblems_InvalidDifficulty(t *testing.T) {
-	router, _ := setupTestRouter(t)
+	router := setupTestRouter(t)
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/api/problems?difficulty=impossible", nil)
@@ -158,7 +156,7 @@ func TestListProblems_InvalidDifficulty(t *testing.T) {
 }
 
 func TestGetProblem_ValidID(t *testing.T) {
-	router, _ := setupTestRouter(t)
+	router := setupTestRouter(t)
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/api/problems/two-sum", nil)
@@ -190,7 +188,7 @@ func TestGetProblem_ValidID(t *testing.T) {
 }
 
 func TestGetProblem_NotFound(t *testing.T) {
-	router, _ := setupTestRouter(t)
+	router := setupTestRouter(t)
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/api/problems/nonexistent", nil)
@@ -202,7 +200,7 @@ func TestGetProblem_NotFound(t *testing.T) {
 }
 
 func TestGetProblem_InvalidID(t *testing.T) {
-	router, _ := setupTestRouter(t)
+	router := setupTestRouter(t)
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/api/problems/bad$id", nil)
@@ -214,7 +212,7 @@ func TestGetProblem_InvalidID(t *testing.T) {
 }
 
 func TestGetTemplate_ValidID(t *testing.T) {
-	router, _ := setupTestRouter(t)
+	router := setupTestRouter(t)
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/api/problems/two-sum/template", nil)
@@ -242,7 +240,7 @@ func TestGetTemplate_ValidID(t *testing.T) {
 }
 
 func TestGetTemplate_NotFound(t *testing.T) {
-	router, _ := setupTestRouter(t)
+	router := setupTestRouter(t)
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/api/problems/nonexistent/template", nil)
@@ -253,93 +251,8 @@ func TestGetTemplate_NotFound(t *testing.T) {
 	}
 }
 
-func TestRunCode_ValidCode(t *testing.T) {
-	router, _ := setupTestRouter(t)
-
-	body := `{"code": "func twoSum(nums []int, target int) []int { return []int{0,1} }"}`
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("POST", "/api/problems/two-sum/run", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	router.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
-	}
-
-	var resp model.APIResponse
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("failed to parse response: %v", err)
-	}
-
-	resultMap, ok := resp.Data.(map[string]interface{})
-	if !ok {
-		t.Fatalf("expected data to be map, got %T", resp.Data)
-	}
-	// Result should have test results
-	if resultMap["total_count"] == nil {
-		t.Error("expected total_count in response")
-	}
-}
-
-func TestRunCode_MissingCode(t *testing.T) {
-	router, _ := setupTestRouter(t)
-
-	body := `{}`
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("POST", "/api/problems/two-sum/run", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	router.ServeHTTP(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400, got %d", w.Code)
-	}
-}
-
-func TestRunCode_EmptyCode(t *testing.T) {
-	router, _ := setupTestRouter(t)
-
-	body := `{"code": "   "}`
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("POST", "/api/problems/two-sum/run", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	router.ServeHTTP(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400, got %d", w.Code)
-	}
-}
-
-func TestRunCode_InvalidProblemID(t *testing.T) {
-	router, _ := setupTestRouter(t)
-
-	body := `{"code": "func test() {}"}`
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("POST", "/api/problems/nonexistent/run", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	router.ServeHTTP(w, req)
-
-	if w.Code != http.StatusNotFound {
-		t.Errorf("expected 404, got %d", w.Code)
-	}
-}
-
-func TestRunCode_InvalidIDFormat(t *testing.T) {
-	router, _ := setupTestRouter(t)
-
-	body := `{"code": "func test() {}"}`
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("POST", "/api/problems/bad/id/run", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	router.ServeHTTP(w, req)
-
-	// Gin may not even route this, or it may return 400/404
-	if w.Code != http.StatusBadRequest && w.Code != http.StatusNotFound {
-		t.Errorf("expected 400 or 404, got %d", w.Code)
-	}
-}
-
 func TestGetHints_ValidID(t *testing.T) {
-	router, _ := setupTestRouter(t)
+	router := setupTestRouter(t)
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/api/problems/two-sum/hints", nil)
@@ -368,7 +281,7 @@ func TestGetHints_ValidID(t *testing.T) {
 }
 
 func TestGetHints_NotFound(t *testing.T) {
-	router, _ := setupTestRouter(t)
+	router := setupTestRouter(t)
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/api/problems/nonexistent/hints", nil)
@@ -380,7 +293,7 @@ func TestGetHints_NotFound(t *testing.T) {
 }
 
 func TestGetHints_InvalidID(t *testing.T) {
-	router, _ := setupTestRouter(t)
+	router := setupTestRouter(t)
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/api/problems/bad$id/hints", nil)
@@ -391,25 +304,8 @@ func TestGetHints_InvalidID(t *testing.T) {
 	}
 }
 
-func TestRunCode_CodeTooLarge(t *testing.T) {
-	router, _ := setupTestRouter(t)
-
-	// Create code larger than 64KB
-	largeCode := strings.Repeat("a", 65*1024)
-	body := `{"code": "` + largeCode + `"}`
-
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("POST", "/api/problems/two-sum/run", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	router.ServeHTTP(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400 for oversized code, got %d", w.Code)
-	}
-}
-
 func TestListProblems_FilterByCategory(t *testing.T) {
-	router, _ := setupTestRouter(t)
+	router := setupTestRouter(t)
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/api/problems?category=array", nil)
@@ -428,14 +324,14 @@ func TestListProblems_FilterByCategory(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected data to be array, got %T", resp.Data)
 	}
-	// two-sum, merge-sorted-arrays, contains-duplicate, max-subarray, coin-change, trapping-rain-water are array category
-	if len(problems) != 6 {
-		t.Errorf("expected 6 array problems, got %d", len(problems))
+	// two-sum, merge-sorted-arrays, contains-duplicate, max-subarray, binary-search, majority-element, coin-change, trapping-rain-water, permutations are array category
+	if len(problems) != 9 {
+		t.Errorf("expected 9 array problems, got %d", len(problems))
 	}
 }
 
 func TestGetProblem_ResponseHasNoSolution(t *testing.T) {
-	router, _ := setupTestRouter(t)
+	router := setupTestRouter(t)
 
 	// Test multiple problems to ensure solution is never exposed
 	problemIDs := []string{"two-sum", "fizz-buzz", "valid-parentheses", "reverse-string", "merge-sorted-arrays", "longest-palindromic-substring"}
@@ -465,7 +361,7 @@ func TestGetProblem_ResponseHasNoSolution(t *testing.T) {
 }
 
 func TestValidateCode_Valid(t *testing.T) {
-	router, _ := setupTestRouter(t)
+	router := setupTestRouter(t)
 
 	body := `{"code": "func twoSum(nums []int, target int) []int { return nil }", "problem_id": "two-sum"}`
 	w := httptest.NewRecorder()
@@ -492,7 +388,7 @@ func TestValidateCode_Valid(t *testing.T) {
 }
 
 func TestValidateCode_MissingCode(t *testing.T) {
-	router, _ := setupTestRouter(t)
+	router := setupTestRouter(t)
 
 	body := `{}`
 	w := httptest.NewRecorder()
@@ -506,7 +402,7 @@ func TestValidateCode_MissingCode(t *testing.T) {
 }
 
 func TestValidateCode_EmptyCode(t *testing.T) {
-	router, _ := setupTestRouter(t)
+	router := setupTestRouter(t)
 
 	body := `{"code": "   "}`
 	w := httptest.NewRecorder()
@@ -520,7 +416,7 @@ func TestValidateCode_EmptyCode(t *testing.T) {
 }
 
 func TestResponseHasMeta(t *testing.T) {
-	router, _ := setupTestRouter(t)
+	router := setupTestRouter(t)
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/api/problems", nil)
@@ -541,7 +437,7 @@ func TestResponseHasMeta(t *testing.T) {
 }
 
 func TestListProblems_FilterByType(t *testing.T) {
-	router, _ := setupTestRouter(t)
+	router := setupTestRouter(t)
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/api/problems?type=function", nil)
@@ -561,13 +457,13 @@ func TestListProblems_FilterByType(t *testing.T) {
 		t.Fatalf("expected data to be array, got %T", resp.Data)
 	}
 	// All problems are function-based now
-	if len(problems) != 10 {
-		t.Errorf("expected 10 function problems, got %d", len(problems))
+	if len(problems) != 20 {
+		t.Errorf("expected 20 function problems, got %d", len(problems))
 	}
 }
 
 func TestListProblems_InvalidType(t *testing.T) {
-	router, _ := setupTestRouter(t)
+	router := setupTestRouter(t)
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/api/problems?type=invalid", nil)
@@ -575,5 +471,80 @@ func TestListProblems_InvalidType(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestListProblems_FilterByTags(t *testing.T) {
+	router := setupTestRouter(t)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/problems?tags=backtracking", nil)
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+
+	var resp model.APIResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	problems, ok := resp.Data.([]interface{})
+	if !ok {
+		t.Fatalf("expected data to be array, got %T", resp.Data)
+	}
+	if len(problems) != 3 {
+		t.Errorf("expected 3 backtracking problems, got %d", len(problems))
+	}
+}
+
+func TestListProblems_FilterByMultipleTags(t *testing.T) {
+	router := setupTestRouter(t)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/problems?tags=dp,string", nil)
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+
+	var resp model.APIResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	problems, ok := resp.Data.([]interface{})
+	if !ok {
+		t.Fatalf("expected data to be array, got %T", resp.Data)
+	}
+	if len(problems) != 2 {
+		t.Errorf("expected 2 problems with dp+string tags, got %d", len(problems))
+	}
+}
+
+func TestListProblems_FilterByTagsAndDifficulty(t *testing.T) {
+	router := setupTestRouter(t)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/problems?tags=backtracking&difficulty=hard", nil)
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+
+	var resp model.APIResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	problems, ok := resp.Data.([]interface{})
+	if !ok {
+		t.Fatalf("expected data to be array, got %T", resp.Data)
+	}
+	if len(problems) != 2 {
+		t.Errorf("expected 2 hard backtracking problems, got %d", len(problems))
 	}
 }

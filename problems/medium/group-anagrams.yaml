@@ -1,0 +1,94 @@
+id: "group-anagrams"
+title: "Group Anagrams"
+type: "function"
+difficulty: "medium"
+category: "string"
+tags: ["hash-map", "sorting", "string", "array"]
+
+description: |
+  Given an array of strings `strs`, group the anagrams together.
+  You can return the answer in any order.
+
+  An anagram is a word or phrase formed by rearranging the letters of a different
+  word or phrase, typically using all the original letters exactly once.
+
+function_name: "groupAnagrams"
+parameters:
+  - name: "strs"
+    type: "[]string"
+    description: "Array of strings to group by anagram"
+return_type: "[][]string"
+
+examples:
+  - input: 'strs = ["eat","tea","tan","ate","nat","bat"]'
+    output: '[["bat"],["nat","tan"],["ate","eat","tea"]]'
+    explanation: "Anagram groups: ate/eat/tea share sorted key 'aet', nat/tan share 'ant', bat is alone with 'abt'."
+  - input: 'strs = [""]'
+    output: '[[""]]'
+    explanation: "Single empty string forms its own group."
+
+hints:
+  - level: 1
+    title: "Key strategy"
+    content: "Two words are anagrams if they have the same letters. How can you create a common key for all anagrams?"
+  - level: 2
+    title: "Sorting approach"
+    content: "Sort each string's characters alphabetically. Anagrams will produce the same sorted string, which you can use as a map key."
+  - level: 3
+    title: "Hash map grouping"
+    content: |
+      Create a map[string][]string. For each word:
+      1. Convert to byte slice, sort it, convert back to string as the key
+      2. Append the original word to map[key]
+      Return all map values as the result.
+
+template: |
+  func groupAnagrams(strs []string) [][]string {
+      // Your code here
+      return nil
+  }
+
+test_cases:
+  - params: [[["eat", "tea", "tan", "ate", "nat", "bat"]]]
+    expected: [["bat"], ["nat", "tan"], ["ate", "eat", "tea"]]
+    description: "Standard case with multiple anagram groups"
+  - params: [[[""]]]
+    expected: [[""]]
+    description: "Single empty string"
+  - params: [[["a"]]]
+    expected: [["a"]]
+    description: "Single character"
+  - params: [[["bdddddddddd", "bbbbbbbbbbc"]]]
+    expected: [["bdddddddddd"], ["bbbbbbbbbbc"]]
+    description: "No anagrams - each in its own group"
+  - params: [[["", ""]]]
+    expected: [["", ""]]
+    description: "Multiple empty strings"
+
+constraints:
+  - "1 ≤ len(strs) ≤ 10⁴"
+  - "1 ≤ len(strs[i]) ≤ 100"
+  - "strs[i] consists of lowercase English letters."
+
+time_complexity_hint: "O(n × k log k)"
+space_complexity_hint: "O(n × k)"
+
+solution:
+  code: |
+    func groupAnagrams(strs []string) [][]string {
+        groups := make(map[string][]string)
+        for _, s := range strs {
+            sorted := []byte(s)
+            sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
+            key := string(sorted)
+            groups[key] = append(groups[key], s)
+        }
+        result := make([][]string, 0, len(groups))
+        for _, group := range groups {
+            result = append(result, group)
+        }
+        return result
+    }
+  approach: "Sort each string and use as hash map key"
+  time_complexity: "O(n × k log k)"
+  space_complexity: "O(n × k)"

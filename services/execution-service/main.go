@@ -301,6 +301,7 @@ func main() {
 	srv.router.Use(middleware.RequestIDMiddleware())
 	srv.router.Use(middleware.LoggerMiddleware())
 	srv.router.Use(middleware.CORSMiddleware())
+	srv.router.Use(middleware.RequestValidationMiddleware(middleware.DefaultRequestValidationConfig()))
 
 	// Register routes
 	srv.setupRoutes()
@@ -310,7 +311,7 @@ func main() {
 	defer cancel()
 
 	if rmqClient != nil {
-		go srv.startConsumer()
+		go srv.startConsumer(ctx)
 		if dlqHandler != nil {
 			go dlqHandler.Start(ctx)
 		}
@@ -321,6 +322,9 @@ func main() {
 	// Start server
 	port := getEnv("PORT", ServicePort)
 	runServer(srv, port)
+
+	// Stop background goroutines on shutdown
+	srv.wsHub.Stop()
 }
 
 func (s *Server) setupRoutes() {
@@ -352,12 +356,12 @@ func (s *Server) healthCheck(c *gin.Context) {
 	rmqStatus := "ok"
 
 	if err := s.db.HealthCheck(ctx); err != nil {
-		dbStatus = "error: " + err.Error()
+		dbStatus = "unavailable"
 		status = "degraded"
 	}
 	if s.rabbitmq != nil {
 		if err := s.rabbitmq.HealthCheck(ctx); err != nil {
-			rmqStatus = "error: " + err.Error()
+			rmqStatus = "unavailable"
 			status = "degraded"
 		}
 	}
@@ -411,12 +415,18 @@ func (s *Server) queueStatsHandler(c *gin.Context) {
 // createSubmission handles POST /api/submissions with priority support.
 func (s *Server) createSubmission(c *gin.Context) {
 	ctx := c.Request.Context()
-	userID, _ := c.Get(middleware.ContextKeyUserID)
+	userIDRaw, _ := c.Get(middleware.ContextKeyUserID)
 	role, _ := c.Get(middleware.ContextKeyRole)
+
+	userID, ok := userIDRaw.(string)
+	if !ok || userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
 
 	var req CreateSubmissionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request", "details": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request format"})
 		return
 	}
 
@@ -453,7 +463,7 @@ func (s *Server) createSubmission(c *gin.Context) {
 	msg := ExecutionMessage{
 		SubmissionID: submissionID,
 		ProblemID:    req.ProblemID,
-		UserID:       userID.(string),
+		UserID:       userID,
 		Code:         req.Code,
 		Language:     req.Language,
 		EnqueuedAt:   time.Now().UTC().Format(time.RFC3339),
@@ -484,7 +494,7 @@ func (s *Server) createSubmission(c *gin.Context) {
 	_, _ = s.db.Exec(ctx, "UPDATE submissions SET status = 'queued' WHERE id = $1", submissionID)
 
 	// Notify user via WebSocket
-	s.wsHub.SendToUser(userID.(string), &websocket.Message{
+	s.wsHub.SendToUser(userID, &websocket.Message{
 		Type: "submission.queued",
 		Room: fmt.Sprintf("submission-%s", submissionID),
 		Payload: map[string]interface{}{
@@ -505,7 +515,12 @@ func (s *Server) createSubmission(c *gin.Context) {
 // getSubmission handles GET /api/submissions/:id.
 func (s *Server) getSubmission(c *gin.Context) {
 	ctx := c.Request.Context()
-	userID, _ := c.Get(middleware.ContextKeyUserID)
+	userIDRaw, _ := c.Get(middleware.ContextKeyUserID)
+	userID, ok := userIDRaw.(string)
+	if !ok || userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
 	submissionID := c.Param("id")
 
 	// Try cache first
@@ -563,7 +578,12 @@ func (s *Server) getSubmission(c *gin.Context) {
 func (s *Server) getUserSubmissions(c *gin.Context) {
 	ctx := c.Request.Context()
 	requestedUserID := c.Param("userId")
-	currentUserID, _ := c.Get(middleware.ContextKeyUserID)
+	currentUserIDRaw, _ := c.Get(middleware.ContextKeyUserID)
+	currentUserID, ok := currentUserIDRaw.(string)
+	if !ok || currentUserID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
 
 	// Only allow users to see their own submissions (or admin)
 	if requestedUserID != currentUserID && !s.isAdmin(c) {
@@ -632,26 +652,26 @@ func (s *Server) getUserSubmissions(c *gin.Context) {
 
 // handleWebSocket handles real-time submission status updates.
 func (s *Server) handleWebSocket(c *gin.Context) {
-	userID, exists := c.Get(middleware.ContextKeyUserID)
-	if !exists {
+	userIDRaw, exists := c.Get(middleware.ContextKeyUserID)
+	if !exists || userIDRaw == nil {
 		// Try to get from query param for service-to-service
-		userID = c.Query("user_id")
+		userIDRaw = c.Query("user_id")
 	}
-	if userID == nil {
+	userID, ok := userIDRaw.(string)
+	if !ok || userID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 
-	s.wsHub.HandleWebSocket(c, userID.(string))
+	s.wsHub.HandleWebSocket(c, userID)
 }
 
 // startConsumer starts consuming execution results from RabbitMQ.
-func (s *Server) startConsumer() {
+func (s *Server) startConsumer(ctx context.Context) {
 	if s.rabbitmq == nil {
 		return
 	}
 
-	ctx := context.Background()
 	err := s.rabbitmq.Consume(ctx, rabbitmq.QueueCodeExecution, func(msg amqp.Delivery) error {
 		var result ExecutionMessage
 		if err := json.Unmarshal(msg.Body, &result); err != nil {

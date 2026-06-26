@@ -144,6 +144,7 @@ func main() {
 	srv.router.Use(middleware.RequestIDMiddleware())
 	srv.router.Use(middleware.LoggerMiddleware())
 	srv.router.Use(middleware.CORSMiddleware())
+	srv.router.Use(middleware.RequestValidationMiddleware(middleware.DefaultRequestValidationConfig()))
 
 	srv.setupRoutes()
 
@@ -192,7 +193,7 @@ func (s *Server) healthCheck(c *gin.Context) {
 	dbStatus := "ok"
 
 	if err := s.db.HealthCheck(ctx); err != nil {
-		dbStatus = "error: " + err.Error()
+		dbStatus = "unavailable"
 		status = "degraded"
 	}
 

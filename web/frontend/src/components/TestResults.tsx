@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { CheckCircle, XCircle, Clock, Zap, HardDrive } from "lucide-react";
 import { useSubmissionStore } from "../store/submissionStore";
-import type { TestResult, SubmissionStatus } from "../types";
+import type { SubmissionStatus } from "../types";
 
 const statusConfig: Record<SubmissionStatus, { icon: typeof CheckCircle; color: string; label: string }> = {
   accepted: { icon: CheckCircle, color: "text-green-500", label: "Accepted" },
@@ -59,7 +59,7 @@ export function TestResults() {
   }
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden animate-fade-in">
       {showConfetti && <Confetti />}
 
       {/* Progress bar */}
@@ -94,7 +94,11 @@ export function TestResults() {
             const config = statusConfig[result.status];
             const Icon = config.icon;
             return (
-              <div key={result.test_case_id} className="p-4">
+              <div
+                key={result.test_case_id}
+                className="p-4 animate-fade-in"
+                style={{ animationDelay: `${idx * 0.08}s` }}
+              >
                 <div className="flex items-start gap-3">
                   <Icon className={`w-5 h-5 mt-0.5 shrink-0 ${config.color}`} />
                   <div className="flex-1 min-w-0">

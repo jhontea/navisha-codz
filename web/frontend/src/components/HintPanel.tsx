@@ -7,7 +7,7 @@ interface HintPanelProps {
   hints: Hint[];
 }
 
-export function HintPanel({ problemId, hints }: HintPanelProps) {
+export function HintPanel({ problemId: _problemId, hints }: HintPanelProps) {
   const [revealedHints, setRevealedHints] = useState<Set<string>>(
     new Set(hints.filter((h) => h.is_revealed).map((h) => h.id))
   );

@@ -17,7 +17,7 @@ func TestNewHintService(t *testing.T) {
 
 func TestGetHints_NilProblem(t *testing.T) {
 	svc := NewHintService()
-	hints := svc.GetHints(nil)
+	hints := svc.GetHints("test-user", nil)
 	if hints != nil {
 		t.Errorf("expected nil for nil problem, got %v", hints)
 	}
@@ -35,7 +35,7 @@ func TestGetHints_ProgressiveReveal(t *testing.T) {
 	}
 
 	// First request: should get first 2 hints
-	hints := svc.GetHints(problem)
+	hints := svc.GetHints("test-user", problem)
 	if len(hints) != 2 {
 		t.Errorf("expected 2 hints on first request, got %d", len(hints))
 	}
@@ -44,7 +44,7 @@ func TestGetHints_ProgressiveReveal(t *testing.T) {
 	}
 
 	// Second request: should get remaining 1 hint
-	hints = svc.GetHints(problem)
+	hints = svc.GetHints("test-user", problem)
 	if len(hints) != 1 {
 		t.Errorf("expected 1 hint on second request, got %d", len(hints))
 	}
@@ -53,7 +53,7 @@ func TestGetHints_ProgressiveReveal(t *testing.T) {
 	}
 
 	// Third request: all hints already revealed, should return all
-	hints = svc.GetHints(problem)
+	hints = svc.GetHints("test-user", problem)
 	if len(hints) != 3 {
 		t.Errorf("expected all 3 hints on third request, got %d", len(hints))
 	}
@@ -68,13 +68,13 @@ func TestGetHints_SingleHint(t *testing.T) {
 		},
 	}
 
-	hints := svc.GetHints(problem)
+	hints := svc.GetHints("test-user", problem)
 	if len(hints) != 1 {
 		t.Errorf("expected 1 hint, got %d", len(hints))
 	}
 
 	// Second request: all revealed
-	hints = svc.GetHints(problem)
+	hints = svc.GetHints("test-user", problem)
 	if len(hints) != 1 {
 		t.Errorf("expected 1 hint (all revealed), got %d", len(hints))
 	}
@@ -93,19 +93,19 @@ func TestGetHints_FourHints(t *testing.T) {
 	}
 
 	// First: 2 hints
-	hints := svc.GetHints(problem)
+	hints := svc.GetHints("test-user", problem)
 	if len(hints) != 2 {
 		t.Errorf("expected 2, got %d", len(hints))
 	}
 
 	// Second: remaining 2
-	hints = svc.GetHints(problem)
+	hints = svc.GetHints("test-user", problem)
 	if len(hints) != 2 {
 		t.Errorf("expected 2, got %d", len(hints))
 	}
 
 	// Third: all 4
-	hints = svc.GetHints(problem)
+	hints = svc.GetHints("test-user", problem)
 	if len(hints) != 4 {
 		t.Errorf("expected 4, got %d", len(hints))
 	}
@@ -122,7 +122,7 @@ func TestGetHints_SortedByLevel(t *testing.T) {
 		},
 	}
 
-	hints := svc.GetHints(problem)
+	hints := svc.GetHints("test-user", problem)
 	if len(hints) < 2 {
 		t.Fatal("expected at least 2 hints")
 	}
@@ -168,13 +168,13 @@ func TestReset(t *testing.T) {
 	}
 
 	// Reveal some hints
-	svc.GetHints(problem)
+	svc.GetHints("test-user", problem)
 
 	// Reset
-	svc.Reset("reset-test")
+	svc.Reset("test-user", "reset-test")
 
 	// Should reveal from beginning again
-	hints := svc.GetHints(problem)
+	hints := svc.GetHints("test-user", problem)
 	if len(hints) != 2 {
 		t.Errorf("expected 2 hints after reset, got %d", len(hints))
 	}
@@ -183,7 +183,7 @@ func TestReset(t *testing.T) {
 func TestReset_NonExistent(t *testing.T) {
 	svc := NewHintService()
 	// Should not panic
-	svc.Reset("nonexistent-id")
+	svc.Reset("test-user", "nonexistent-id")
 }
 
 func TestSanitizeProblemID_Valid(t *testing.T) {
@@ -371,7 +371,7 @@ func TestGetHints_ConcurrentAccess(t *testing.T) {
 	done := make(chan bool, 5)
 	for i := 0; i < 5; i++ {
 		go func() {
-			svc.GetHints(problem)
+			svc.GetHints("test-user", problem)
 			done <- true
 		}()
 	}

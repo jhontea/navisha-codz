@@ -4,17 +4,23 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
+	"coding-challange/internal/handler"
 	"coding-challange/internal/repository"
+	"coding-challange/internal/service"
 	"coding-challange/pkg/middleware"
 )
 
 func init() {
 	gin.SetMode(gin.TestMode)
+	os.Setenv("JWT_ACCESS_SECRET", "test-access-secret")
+	os.Setenv("JWT_REFRESH_SECRET", "test-refresh-secret")
 }
 
 // setupTestServer creates a test server with all routes configured.
@@ -27,10 +33,9 @@ func setupTestServer(t *testing.T) (*gin.Engine, *repository.ProblemRepository) 
 	}
 
 	problemSvc := service.NewProblemService(repo)
-	runnerSvc := service.NewRunnerService(10, 256)
 	hintSvc := service.NewHintService()
 
-	h := handler.NewProblemHandler(problemSvc, runnerSvc, hintSvc)
+	h := handler.NewProblemHandler(problemSvc, hintSvc)
 
 	router := gin.New()
 	router.Use(middleware.RequestIDMiddleware())
@@ -40,7 +45,6 @@ func setupTestServer(t *testing.T) (*gin.Engine, *repository.ProblemRepository) 
 		api.GET("/problems", h.ListProblems)
 		api.GET("/problems/:id", h.GetProblem)
 		api.GET("/problems/:id/template", h.GetTemplate)
-		api.POST("/problems/:id/run", h.RunCode)
 		api.POST("/api/validate", h.ValidateCode)
 		api.GET("/problems/:id/hints", h.GetHints)
 	}
@@ -115,7 +119,7 @@ func TestAuth_LoginFlow(t *testing.T) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		accessToken, refreshToken, err := middleware.GenerateTokenPair(cfg, "user-1", req.Username, "user")
+		accessToken, refreshToken, _, _, err := middleware.GenerateTokenPair(cfg, "user-1", req.Username, "user")
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "token generation failed"})
 			return
@@ -169,7 +173,7 @@ func TestAuth_TokenRefreshFlow(t *testing.T) {
 
 	router := gin.New()
 	router.POST("/api/auth/login", func(c *gin.Context) {
-		accessToken, refreshToken, _ := middleware.GenerateTokenPair(cfg, "user-1", "bob", "user")
+		accessToken, refreshToken, _, _, _ := middleware.GenerateTokenPair(cfg, "user-1", "bob", "user")
 		c.JSON(http.StatusOK, gin.H{
 			"access_token":  accessToken,
 			"refresh_token": refreshToken,
@@ -192,7 +196,7 @@ func TestAuth_TokenRefreshFlow(t *testing.T) {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "not a refresh token"})
 			return
 		}
-		newAccessToken, newRefreshToken, _ := middleware.GenerateTokenPair(cfg, claims.UserID, claims.Username, claims.Role)
+		newAccessToken, newRefreshToken, _, _, _ := middleware.GenerateTokenPair(cfg, claims.UserID, claims.Username, claims.Role)
 		c.JSON(http.StatusOK, gin.H{
 			"access_token":  newAccessToken,
 			"refresh_token": newRefreshToken,
@@ -239,8 +243,11 @@ func TestAuth_ProtectedEndpoint(t *testing.T) {
 	cfg := middleware.NewJWTConfig()
 	cfg.AccessTokenSecret = "protected-test-secret"
 
+	blacklist := middleware.NewTokenBlacklist(false)
+	sessionManager := middleware.NewSessionManager(10)
+
 	router := gin.New()
-	router.GET("/api/protected", middleware.AuthMiddleware(cfg), func(c *gin.Context) {
+	router.GET("/api/protected", middleware.AuthMiddleware(cfg, blacklist, sessionManager), func(c *gin.Context) {
 		userID, _ := c.Get(middleware.ContextKeyUserID)
 		username, _ := c.Get(middleware.ContextKeyUsername)
 		c.JSON(http.StatusOK, gin.H{
@@ -256,7 +263,9 @@ func TestAuth_ProtectedEndpoint(t *testing.T) {
 		t.Errorf("expected 401 without token, got %d", w.Code)
 	}
 
-	token, _, _ := middleware.GenerateTokenPair(cfg, "user-42", "charlie", "user")
+	token, _, _, sessionID, _ := middleware.GenerateTokenPair(cfg, "user-42", "charlie", "user")
+	sessionManager.CreateSessionWithID(sessionID, "user-42", "charlie", "user", "127.0.0.1", "test-agent", "", time.Minute*5)
+
 	req = httptest.NewRequest("GET", "/api/protected", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	w = httptest.NewRecorder()
@@ -270,13 +279,17 @@ func TestAuth_AdminEndpoint(t *testing.T) {
 	cfg := middleware.NewJWTConfig()
 	cfg.AccessTokenSecret = "admin-test-secret"
 
+	blacklist := middleware.NewTokenBlacklist(false)
+	sessionManager := middleware.NewSessionManager(10)
+
 	router := gin.New()
-	router.GET("/api/admin", middleware.AuthMiddleware(cfg), middleware.RoleMiddleware("admin"), func(c *gin.Context) {
+	router.GET("/api/admin", middleware.AuthMiddleware(cfg, blacklist, sessionManager), middleware.RoleMiddleware("admin"), func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "admin access granted"})
 	})
 
 	// Regular user should be denied
-	userToken, _, _ := middleware.GenerateTokenPair(cfg, "user-1", "alice", "user")
+	userToken, _, _, userSessionID, _ := middleware.GenerateTokenPair(cfg, "user-1", "alice", "user")
+	sessionManager.CreateSessionWithID(userSessionID, "user-1", "alice", "user", "127.0.0.1", "test-agent", "", time.Minute*5)
 	req := httptest.NewRequest("GET", "/api/admin", nil)
 	req.Header.Set("Authorization", "Bearer "+userToken)
 	w := httptest.NewRecorder()
@@ -286,7 +299,8 @@ func TestAuth_AdminEndpoint(t *testing.T) {
 	}
 
 	// Admin should be granted access
-	adminToken, _, _ := middleware.GenerateTokenPair(cfg, "admin-1", "admin", "admin")
+	adminToken, _, _, adminSessionID, _ := middleware.GenerateTokenPair(cfg, "admin-1", "admin", "admin")
+	sessionManager.CreateSessionWithID(adminSessionID, "admin-1", "admin", "admin", "127.0.0.1", "test-agent", "", time.Minute*5)
 	req = httptest.NewRequest("GET", "/api/admin", nil)
 	req.Header.Set("Authorization", "Bearer "+adminToken)
 	w = httptest.NewRecorder()

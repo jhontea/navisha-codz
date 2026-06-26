@@ -64,7 +64,7 @@ func TestHint_ProgressiveReveal_Integration(t *testing.T) {
 	}
 
 	// First request: should get 2 hints
-	hints := hintSvc.GetHints(problem)
+	hints := hintSvc.GetHints("test-user", problem)
 	if len(hints) != 2 {
 		t.Errorf("first request: expected 2 hints, got %d", len(hints))
 	}
@@ -73,7 +73,7 @@ func TestHint_ProgressiveReveal_Integration(t *testing.T) {
 	}
 
 	// Second request: should get remaining 2 hints
-	hints = hintSvc.GetHints(problem)
+	hints = hintSvc.GetHints("test-user", problem)
 	if len(hints) != 2 {
 		t.Errorf("second request: expected 2 hints, got %d", len(hints))
 	}
@@ -82,7 +82,7 @@ func TestHint_ProgressiveReveal_Integration(t *testing.T) {
 	}
 
 	// Third request: all hints revealed, should return all 4
-	hints = hintSvc.GetHints(problem)
+	hints = hintSvc.GetHints("test-user", problem)
 	if len(hints) != 4 {
 		t.Errorf("third request: expected all 4 hints, got %d", len(hints))
 	}
@@ -99,18 +99,18 @@ func TestHint_TrackUsage_Integration(t *testing.T) {
 	}
 
 	// Track usage by requesting hints multiple times
-	hintSvc.GetHints(problem)
-	hintSvc.GetHints(problem)
+	hintSvc.GetHints("test-user", problem)
+	hintSvc.GetHints("test-user", problem)
 
 	// After 2 requests, all hints should be revealed
-	hints := hintSvc.GetHints(problem)
+	hints := hintSvc.GetHints("test-user", problem)
 	if len(hints) != 2 {
 		t.Errorf("expected all 2 hints after full reveal, got %d", len(hints))
 	}
 
 	// Reset and verify tracking is reset
-	hintSvc.Reset("usage-track-test")
-	hints = hintSvc.GetHints(problem)
+	hintSvc.Reset("test-user", "usage-track-test")
+	hints = hintSvc.GetHints("test-user", problem)
 	if len(hints) != 2 {
 		t.Errorf("expected 2 hints after reset, got %d", len(hints))
 	}
@@ -127,7 +127,7 @@ func TestHint_SortedByLevel(t *testing.T) {
 		},
 	}
 
-	hints := hintSvc.GetHints(problem)
+	hints := hintSvc.GetHints("test-user", problem)
 	if len(hints) < 2 {
 		t.Fatal("expected at least 2 hints")
 	}
@@ -149,13 +149,13 @@ func TestHint_SingleHint(t *testing.T) {
 		},
 	}
 
-	hints := hintSvc.GetHints(problem)
+	hints := hintSvc.GetHints("test-user", problem)
 	if len(hints) != 1 {
 		t.Errorf("expected 1 hint, got %d", len(hints))
 	}
 
 	// Second request: all revealed
-	hints = hintSvc.GetHints(problem)
+	hints = hintSvc.GetHints("test-user", problem)
 	if len(hints) != 1 {
 		t.Errorf("expected 1 hint (all revealed), got %d", len(hints))
 	}
@@ -168,7 +168,7 @@ func TestHint_EmptyHints(t *testing.T) {
 		Hints: []model.Hint{},
 	}
 
-	hints := hintSvc.GetHints(problem)
+	hints := hintSvc.GetHints("test-user", problem)
 	if len(hints) != 0 {
 		t.Errorf("expected 0 hints, got %d", len(hints))
 	}
@@ -176,7 +176,7 @@ func TestHint_EmptyHints(t *testing.T) {
 
 func TestHint_NilProblem(t *testing.T) {
 	hintSvc := service.NewHintService()
-	hints := hintSvc.GetHints(nil)
+	hints := hintSvc.GetHints("test-user", nil)
 	if hints != nil {
 		t.Errorf("expected nil for nil problem, got %v", hints)
 	}
@@ -214,7 +214,7 @@ func TestHint_ConcurrentAccess(t *testing.T) {
 	done := make(chan bool, 10)
 	for i := 0; i < 10; i++ {
 		go func() {
-			hintSvc.GetHints(problem)
+			hintSvc.GetHints("test-user", problem)
 			done <- true
 		}()
 	}

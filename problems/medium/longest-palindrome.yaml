@@ -1,0 +1,105 @@
+id: "longest-palindrome"
+title: "Longest Palindrome"
+type: "function"
+difficulty: "medium"
+category: "string"
+tags: ["string", "two-pointers"]
+
+description: |
+  Given a string `s`, find the length of the longest substring that is a
+  palindrome using the expand-around-center approach.
+
+  A palindrome is a string that reads the same backward as forward.
+
+function_name: "longestPalindromeLength"
+parameters:
+  - name: "s"
+    type: "string"
+    description: "Input string"
+return_type: "int"
+
+examples:
+  - input: 's = "babad"'
+    output: "3"
+    explanation: 'The longest palindrome substrings are "bab" and "aba", both of length 3.'
+  - input: 's = "cbbd"'
+    output: "2"
+    explanation: 'The longest palindrome substring is "bb" of length 2.'
+
+hints:
+  - level: 1
+    title: "Expand around center"
+    content: "For each position in the string, try expanding outward to find the longest palindrome with that position as center."
+  - level: 2
+    title: "Odd vs even length"
+    content: "Palindromes can have odd length (center at one character) or even length (center between two characters). Try both."
+  - level: 3
+    title: "Expansion helper"
+    content: |
+      For each index i:
+      1. Expand with center at i (odd length palindrome)
+      2. Expand with center between i and i+1 (even length palindrome)
+      3. Write a helper: expand(s, left, right) that returns length while s[left] == s[right]
+      4. Track the maximum length found
+
+template: |
+  func longestPalindromeLength(s string) int {
+      // Your code here
+      return 0
+  }
+
+test_cases:
+  - params: ["babad"]
+    expected: 3
+    description: "Odd length palindrome"
+  - params: ["cbbd"]
+    expected: 2
+    description: "Even length palindrome"
+  - params: ["a"]
+    expected: 1
+    description: "Single character"
+  - params: ["ac"]
+    expected: 1
+    description: "No palindrome longer than 1"
+  - params: ["racecar"]
+    expected: 7
+    description: "Full string is palindrome"
+
+constraints:
+  - "1 ≤ len(s) ≤ 1000"
+  - "s consists of only digits and English letters."
+
+time_complexity_hint: "O(n²)"
+space_complexity_hint: "O(1)"
+
+solution:
+  code: |
+    func longestPalindromeLength(s string) int {
+        if len(s) < 2 {
+            return len(s)
+        }
+
+        expand := func(left, right int) int {
+            for left >= 0 && right < len(s) && s[left] == s[right] {
+                left--
+                right++
+            }
+            return right - left - 1
+        }
+
+        maxLen := 1
+        for i := 0; i < len(s); i++ {
+            oddLen := expand(i, i)
+            evenLen := expand(i, i+1)
+            if oddLen > maxLen {
+                maxLen = oddLen
+            }
+            if evenLen > maxLen {
+                maxLen = evenLen
+            }
+        }
+        return maxLen
+    }
+  approach: "Expand around center for each position"
+  time_complexity: "O(n²)"
+  space_complexity: "O(1)"

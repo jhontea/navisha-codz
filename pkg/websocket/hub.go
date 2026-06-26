@@ -59,6 +59,8 @@ type Hub struct {
 	register   chan *Client
 	unregister chan *Client
 	broadcast  chan *Message
+	// done signals the Run loop to stop
+	done chan struct{}
 }
 
 // NewHub creates a new WebSocket hub.
@@ -70,13 +72,22 @@ func NewHub() *Hub {
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 		broadcast:  make(chan *Message, 256),
+		done:       make(chan struct{}),
 	}
+}
+
+// Stop gracefully stops the hub's main loop.
+func (h *Hub) Stop() {
+	close(h.done)
 }
 
 // Run starts the hub's main loop for managing clients.
 func (h *Hub) Run() {
 	for {
 		select {
+		case <-h.done:
+			log.Printf("WebSocket hub shutting down...")
+			return
 		case client := <-h.register:
 			h.mu.Lock()
 			h.clients[client.ID] = client

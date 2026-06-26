@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BookOpen, Lightbulb, Code2, Play, CheckCircle } from "lucide-react";
+import { BookOpen, CheckCircle } from "lucide-react";
 import type { Problem } from "../types";
 import { CodeEditor } from "./CodeEditor";
 import { TestResults } from "./TestResults";
@@ -11,7 +11,7 @@ interface ProblemDetailProps {
   isSubmitting: boolean;
 }
 
-export function ProblemDetail({ problem, onSubmit, isSubmitting }: ProblemDetailProps) {
+export function ProblemDetail({ problem, onSubmit, isSubmitting: _isSubmitting }: ProblemDetailProps) {
   const [code, setCode] = useState(problem.function_template);
   const [activeTab, setActiveTab] = useState<"description" | "submissions">("description");
 

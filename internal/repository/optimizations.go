@@ -3,12 +3,15 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"coding-challange/internal/model"
 )
@@ -259,6 +262,172 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// ============================================================================
+// Cursor-Based Pagination for pgx (PostgreSQL via pgxpool)
+// ============================================================================
+
+// CursorPaginatorPGX implements keyset/cursor-based pagination using pgxpool.Pool.
+type CursorPaginatorPGX struct {
+	db                *pgxpool.Pool
+	baseQuery         string
+	countQuery        string
+	defaultPageSize   int
+	maxPageSize       int
+	orderColumn       string
+	cursorColumn      string
+}
+
+// CursorPageRequest holds cursor-based pagination request parameters.
+type CursorPageRequest struct {
+	Limit    int    `form:"limit"`
+	Cursor   string `form:"cursor"`   // base64-encoded JSON cursor
+	PrevCursor string `form:"prev_cursor"`
+}
+
+// CursorPageResponse contains cursor-based pagination results.
+type CursorPageResponse struct {
+	Items      []map[string]interface{} `json:"items"`
+	NextCursor string                   `json:"next_cursor,omitempty"`
+	PrevCursor string                   `json:"prev_cursor,omitempty"`
+	HasMore    bool                     `json:"has_more"`
+	TotalCount int                      `json:"total_count"`
+}
+
+// NewCursorPaginatorPGX creates a new cursor-based paginator for pgx.
+func NewCursorPaginatorPGX(db *pgxpool.Pool, baseQuery, countQuery, orderColumn, cursorColumn string, defaultPageSize, maxPageSize int) *CursorPaginatorPGX {
+	if defaultPageSize <= 0 {
+		defaultPageSize = 20
+	}
+	if maxPageSize <= 0 {
+		maxPageSize = 100
+	}
+	if cursorColumn == "" {
+		cursorColumn = orderColumn
+	}
+	return &CursorPaginatorPGX{
+		db:              db,
+		baseQuery:       baseQuery,
+		countQuery:      countQuery,
+		defaultPageSize: defaultPageSize,
+		maxPageSize:     maxPageSize,
+		orderColumn:     orderColumn,
+		cursorColumn:    cursorColumn,
+	}
+}
+
+// FetchCursor fetches a page using cursor-based pagination.
+// cursor is a base64-encoded JSON value of the last item's cursor column.
+func (cp *CursorPaginatorPGX) FetchCursor(ctx context.Context, pageSize int, cursor string, args ...interface{}) (*CursorPageResponse, error) {
+	if pageSize <= 0 {
+		pageSize = cp.defaultPageSize
+	}
+	if pageSize > cp.maxPageSize {
+		pageSize = cp.maxPageSize
+	}
+
+	query := cp.baseQuery
+	queryArgs := make([]interface{}, 0, len(args)+2)
+	queryArgs = append(queryArgs, args...)
+	argIdx := len(queryArgs) + 1
+
+	if cursor != "" {
+		decodedCursor, err := decodeCursor(cursor)
+		if err == nil && decodedCursor != "" {
+			// Keyset pagination: WHERE cursor_column > cursor_value
+			where := fmt.Sprintf(" %s > $%d", cp.cursorColumn, argIdx)
+			if !strings.Contains(strings.ToUpper(query), "WHERE") {
+				query += " WHERE" + where
+			} else {
+				query += " AND" + where
+			}
+			queryArgs = append(queryArgs, decodedCursor)
+			argIdx++
+		}
+	}
+
+	query += fmt.Sprintf(" ORDER BY %s ASC LIMIT $%d", cp.orderColumn, argIdx)
+	queryArgs = append(queryArgs, pageSize+1) // fetch one extra to check HasMore
+
+	startTime := time.Now()
+	rows, err := cp.db.Query(ctx, query, queryArgs...)
+	if err != nil {
+		return nil, fmt.Errorf("cursor pagination query failed: %w", err)
+	}
+	defer rows.Close()
+
+	fieldDescriptions := rows.FieldDescriptions()
+	columns := make([]string, len(fieldDescriptions))
+	for i, fd := range fieldDescriptions {
+		columns[i] = string(fd.Name)
+	}
+
+	items := make([]map[string]interface{}, 0, pageSize)
+	var lastCursorValue string
+
+	for rows.Next() {
+		values, err := rows.Values()
+		if err != nil {
+			return nil, fmt.Errorf("row values error: %w", err)
+		}
+
+		row := make(map[string]interface{})
+		for i, col := range columns {
+			row[col] = values[i]
+		}
+		items = append(items, row)
+
+		// Capture cursor value from the designated cursor column
+		if v, ok := row[cp.cursorColumn]; ok {
+			lastCursorValue = fmt.Sprintf("%v", v)
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+
+	hasMore := len(items) > pageSize
+	if hasMore {
+		items = items[:pageSize]
+	}
+
+	result := &CursorPageResponse{
+		Items:   items,
+		HasMore: hasMore,
+	}
+
+	if hasMore && lastCursorValue != "" {
+		result.NextCursor = encodeCursor(lastCursorValue)
+	}
+
+	// Get total count
+	var totalCount int
+	if cp.countQuery != "" {
+		_ = cp.db.QueryRow(ctx, cp.countQuery, args...).Scan(&totalCount)
+	}
+	result.TotalCount = totalCount
+
+	log.Printf("[CURSOR PAGE] fetched %d rows, has_more=%t (%v)", len(result.Items), result.HasMore, time.Since(startTime))
+	return result, nil
+}
+
+func decodeCursor(cursor string) (string, error) {
+	data, err := base64.StdEncoding.DecodeString(cursor)
+	if err != nil {
+		return "", fmt.Errorf("invalid cursor encoding: %w", err)
+	}
+	var value string
+	if err := json.Unmarshal(data, &value); err != nil {
+		return "", fmt.Errorf("invalid cursor data: %w", err)
+	}
+	return value, nil
+}
+
+func encodeCursor(value string) string {
+	data, _ := json.Marshal(value)
+	return base64.StdEncoding.EncodeToString(data)
 }
 
 // ============================================================================
