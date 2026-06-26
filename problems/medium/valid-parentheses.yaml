@@ -1,0 +1,107 @@
+id: "valid-parentheses"
+title: "Valid Parentheses"
+type: "function"
+difficulty: "medium"
+category: "stack"
+tags: ["stack", "string", "matching"]
+
+description: |
+  Given a string `s` containing just the characters `(`, `)`, `{`, `}`, `[` and `]`,
+  determine if the input string is valid.
+
+  An input string is valid if:
+  1. Open brackets must be closed by the same type of brackets.
+  2. Open brackets must be closed in the correct order.
+  3. Every close bracket has a corresponding open bracket of the same type.
+
+function_name: "isValid"
+parameters:
+  - name: "s"
+    type: "string"
+    description: "String containing only parentheses characters"
+return_type: "bool"
+
+examples:
+  - input: "s = '()'"
+    output: "true"
+  - input: "s = '()[]{}'"
+    output: "true"
+  - input: "s = '(]'"
+    output: "false"
+    explanation: "'(' is closed by ']' which is a different type."
+
+hints:
+  - level: 1
+    title: "Stack data structure"
+    content: "Think about LIFO (Last In, First Out) — what data structure matches this?"
+  - level: 2
+    title: "Push and pop"
+    content: "Push opening brackets onto a stack. When you see a closing bracket, pop and check if it matches."
+  - level: 3
+    title: "Map for matching pairs"
+    content: |
+      Use a map: `{')': '(', '}': '{', ']': '['}`
+      For each char:
+      - If it's an opening bracket → push to stack
+      - If it's a closing bracket → check if stack top matches the expected opening bracket
+
+template: |
+  func isValid(s string) bool {
+      // Your code here
+      return false
+  }
+
+test_cases:
+  - params: ["()"]
+    expected: true
+    description: "Simple valid pair"
+  - params: ["()[]{}"]
+    expected: true
+    description: "Multiple valid pairs"
+  - params: ["(]"]
+    expected: false
+    description: "Mismatched pair"
+  - params: ["([)]"]
+    expected: false
+    description: "Wrong nesting order"
+  - params: ["{[]}"]
+    expected: true
+    description: "Nested valid brackets"
+  - params: ["("]
+    expected: false
+    description: "Unclosed opening bracket"
+  - params: [")"]
+    expected: false
+    description: "Closing bracket without opening"
+  - params: [""]
+    expected: true
+    description: "Empty string is valid"
+
+constraints:
+  - "1 ≤ len(s) ≤ 10⁴"
+  - "s consists of parentheses only '()[]{}'."
+
+time_complexity_hint: "O(n)"
+space_complexity_hint: "O(n)"
+
+solution:
+  code: |
+    func isValid(s string) bool {
+        stack := []rune{}
+        pairs := map[rune]rune{')': '(', '}': '{', ']': '['}
+
+        for _, ch := range s {
+            if opening, ok := pairs[ch]; ok {
+                if len(stack) == 0 || stack[len(stack)-1] != opening {
+                    return false
+                }
+                stack = stack[:len(stack)-1]
+            } else {
+                stack = append(stack, ch)
+            }
+        }
+        return len(stack) == 0
+    }
+  approach: "Stack with matching map"
+  time_complexity: "O(n)"
+  space_complexity: "O(n)"

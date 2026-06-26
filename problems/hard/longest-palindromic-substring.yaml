@@ -1,0 +1,107 @@
+id: "longest-palindromic-substring"
+title: "Longest Palindromic Substring"
+type: "function"
+difficulty: "hard"
+category: "string"
+tags: ["string", "dp", "two-pointers", "expand-around-center"]
+
+description: |
+  Given a string `s`, return the longest palindromic substring in `s`.
+
+  A palindrome is a string that reads the same backward as forward.
+
+function_name: "longestPalindrome"
+parameters:
+  - name: "s"
+    type: "string"
+    description: "Input string"
+return_type: "string"
+
+examples:
+  - input: 's = "babad"'
+    output: '"bab"'
+    explanation: '"aba" is also a valid answer.'
+  - input: 's = "cbbd"'
+    output: '"bb"'
+
+hints:
+  - level: 1
+    title: "Expand around center"
+    content: "For each position, try expanding outward to find the longest palindrome with that position as center."
+  - level: 2
+    title: "Odd vs even length"
+    content: "Palindromes can have odd or even length. For even length, the center is between two characters."
+  - level: 3
+    title: "Two-pointer expansion"
+    content: |
+      For each index i:
+      1. Expand with center at i (odd length)
+      2. Expand with center between i and i+1 (even length)
+      3. Keep track of the longest found
+
+template: |
+  func longestPalindrome(s string) string {
+      // Your code here
+      return ""
+  }
+
+test_cases:
+  - params: ["babad"]
+    expected: "bab"
+    description: "Odd length palindrome"
+  - params: ["cbbd"]
+    expected: "bb"
+    description: "Even length palindrome"
+  - params: ["a"]
+    expected: "a"
+    description: "Single character"
+  - params: ["ac"]
+    expected: "a"
+    description: "No palindrome longer than 1"
+  - params: ["racecar"]
+    expected: "racecar"
+    description: "Full string is palindrome"
+
+constraints:
+  - "1 ≤ len(s) ≤ 1000"
+  - "s consist of only digits and English letters."
+
+time_complexity_hint: "O(n²)"
+space_complexity_hint: "O(1)"
+
+solution:
+  code: |
+    func longestPalindrome(s string) string {
+        if len(s) < 2 {
+            return s
+        }
+
+        start, maxLen := 0, 1
+
+        expandAroundCenter := func(left, right int) (int, int) {
+            for left >= 0 && right < len(s) && s[left] == s[right] {
+                left--
+                right++
+            }
+            return left + 1, right - left - 1
+        }
+
+        for i := 0; i < len(s); i++ {
+            // Odd length palindrome
+            l1, l1Len := expandAroundCenter(i, i)
+            if l1Len > maxLen {
+                start, maxLen = l1, l1Len
+            }
+
+            // Even length palindrome
+            l2, l2Len := expandAroundCenter(i, i+1)
+            if l2Len > maxLen {
+                start, maxLen = l2, l2Len
+            }
+        }
+
+        return s[start : start+maxLen]
+    }
+  approach: "Expand around center for each position"
+  time_complexity: "O(n²)"
+  space_complexity: "O(1)"

@@ -1,0 +1,76 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sandbox-runner-config
+  namespace: sandbox
+  labels:
+    app.kubernetes.io/part-of: coding-challange
+data:
+  # Default resource limits per difficulty
+  easy-cpu-limit: "500m"
+  easy-memory-limit: "128Mi"
+  easy-memory-limit-mb: "128"
+  easy-time-limit: "5"
+
+  medium-cpu-limit: "1000m"
+  medium-memory-limit: "256Mi"
+  medium-memory-limit-mb: "256"
+  medium-time-limit: "10"
+
+  hard-cpu-limit: "2000m"
+  hard-memory-limit: "512Mi"
+  hard-memory-limit-mb: "512"
+  hard-time-limit: "30"
+
+  # Sandbox image
+  sandbox-image: "coding-challange/sandbox-runner:latest"
+
+  # Runner script that executes user code
+  runner-script: |
+    #!/bin/sh
+    set -e
+
+    # Read submission details from environment
+    SUBMISSION_ID="${SUBMISSION_ID}"
+    LANGUAGE="${LANGUAGE:-go}"
+    TIME_LIMIT="${TIME_LIMIT_SECONDS:-10}"
+    MEMORY_LIMIT="${MEMORY_LIMIT_MB:-256}"
+
+    # Create working directory
+    WORK_DIR="/app/code"
+    mkdir -p "$WORK_DIR"
+    cd "$WORK_DIR"
+
+    # Write the code to a file
+    if [ "$LANGUAGE" = "go" ]; then
+      cat > main.go << 'USEREOF'
+    ${USER_CODE}
+    USEREOF
+
+      # Run with timeout and resource limits
+      timeout "${TIME_LIMIT}s" \
+        /app/sandbox-runner \
+        -memory="${MEMORY_LIMIT}" \
+        -time="${TIME_LIMIT}" \
+        -output="/app/output/result.json" \
+        go run main.go > /app/output/stdout.txt 2> /app/output/stderr.txt
+
+    elif [ "$LANGUAGE" = "python" ]; then
+      cat > solution.py << 'USEREOF'
+    ${USER_CODE}
+    USEREOF
+
+      timeout "${TIME_LIMIT}s" \
+        python3 solution.py > /app/output/stdout.txt 2> /app/output/stderr.txt
+
+    elif [ "$LANGUAGE" = "javascript" ]; then
+      cat > solution.js << 'USEREOF'
+    ${USER_CODE}
+    USEREOF
+
+      timeout "${TIME_LIMIT}s" \
+        node solution.js > /app/output/stdout.txt 2> /app/output/stderr.txt
+    fi
+
+    # Write result
+    echo '{"status": "completed", "submission_id": "'"$SUBMISSION_ID"'"}' > /app/output/result.json

@@ -1,0 +1,86 @@
+id: "fizz-buzz"
+title: "FizzBuzz"
+type: "function"
+difficulty: "easy"
+category: "math"
+tags: ["math", "string", "conditional"]
+
+description: |
+  Given an integer `n`, return a string array `answer` (1-indexed) where:
+
+  - `answer[i] == "FizzBuzz"` if `i` is divisible by both 3 and 5
+  - `answer[i] == "Fizz"` if `i` is divisible by 3
+  - `answer[i] == "Buzz"` if `i` is divisible by 5
+  - `answer[i] == strconv.Itoa(i)` if none of the above conditions are true
+
+function_name: "fizzBuzz"
+parameters:
+  - name: "n"
+    type: "int"
+    description: "Upper bound of range (1 to n)"
+return_type: "[]string"
+
+examples:
+  - input: "n = 3"
+    output: '["1","2","Fizz"]'
+  - input: "n = 5"
+    output: '["1","2","Fizz","4","Buzz"]'
+
+hints:
+  - level: 1
+    title: "Modulo operator"
+    content: "Use the `%` operator to check divisibility."
+  - level: 2
+    title: "Order matters"
+    content: "Check divisibility by both 3 and 5 FIRST, before checking individually."
+  - level: 3
+    title: "String conversion"
+    content: "Use `strconv.Itoa(i)` to convert integer to string."
+
+template: |
+  func fizzBuzz(n int) []string {
+      // Your code here
+      return nil
+  }
+
+test_cases:
+  - params: [3]
+    expected: ["1", "2", "Fizz"]
+    description: "Simple case: n=3"
+  - params: [5]
+    expected: ["1", "2", "Fizz", "4", "Buzz"]
+    description: "n=5 with Fizz and Buzz"
+  - params: [15]
+    expected: ["1", "2", "Fizz", "4", "Buzz", "Fizz", "7", "8", "Fizz", "Buzz", "11", "Fizz", "13", "14", "FizzBuzz"]
+    description: "Full FizzBuzz case"
+  - params: [1]
+    expected: ["1"]
+    description: "Minimum n"
+
+constraints:
+  - "1 ≤ n ≤ 10⁴"
+
+time_complexity_hint: "O(n)"
+space_complexity_hint: "O(n)"
+
+solution:
+  code: |
+    func fizzBuzz(n int) []string {
+        result := make([]string, n)
+        for i := 1; i <= n; i++ {
+            switch {
+            case i%15 == 0:
+                result[i-1] = "FizzBuzz"
+            case i%3 == 0:
+                result[i-1] = "Fizz"
+            case i%5 == 0:
+                result[i-1] = "Buzz"
+            default:
+                result[i-1] = strconv.Itoa(i)
+            }
+        }
+        return result
+    }
+  approach: "Simple iteration with modulo checks"
+  time_complexity: "O(n)"
+  space_complexity: "O(n)"

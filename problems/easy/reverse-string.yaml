@@ -1,0 +1,72 @@
+id: "reverse-string"
+title: "Reverse String"
+type: "function"
+difficulty: "easy"
+category: "string"
+tags: ["two-pointers", "string", "array"]
+
+description: |
+  Write a function that reverses a string. The input string is given as an
+  array of characters `s`. You must do this by modifying the input array
+  in-place with O(1) extra memory.
+
+function_name: "reverseString"
+parameters:
+  - name: "s"
+    type: "[]byte"
+    description: "Array of characters to reverse in-place"
+return_type: "void"
+
+examples:
+  - input: 's = ["h","e","l","l","o"]'
+    output: '["o","l","l","e","h"]'
+  - input: 's = ["H","a","n","n","a","h"]'
+    output: '["h","a","n","n","a","H"]'
+
+hints:
+  - level: 1
+    title: "Two pointers"
+    content: "Think about swapping elements from both ends moving inward."
+  - level: 2
+    title: "Swap in place"
+    content: "Use two pointers: one at start, one at end. Swap and move inward."
+  - level: 3
+    title: "Loop condition"
+    content: "Loop while left < right. Swap s[left] and s[right], then left++, right--."
+
+template: |
+  func reverseString(s []byte) {
+      // Your code here
+  }
+
+test_cases:
+  - params: [[["h", "e", "l", "l", "o"]]]
+    expected: [["o", "l", "l", "e", "h"]]
+    description: "Odd length string"
+  - params: [[["H", "a", "n", "n", "a", "h"]]]
+    expected: [["h", "a", "n", "n", "a", "H"]]
+    description: "Even length string"
+  - params: [[["a"]]]
+    expected: [["a"]]
+    description: "Single character"
+
+constraints:
+  - "1 ≤ len(s) ≤ 10⁵"
+  - "s[i] is a printable ASCII character."
+
+time_complexity_hint: "O(n)"
+space_complexity_hint: "O(1)"
+
+solution:
+  code: |
+    func reverseString(s []byte) {
+        left, right := 0, len(s)-1
+        for left < right {
+            s[left], s[right] = s[right], s[left]
+            left++
+            right--
+        }
+    }
+  approach: "Two-pointer swap"
+  time_complexity: "O(n)"
+  space_complexity: "O(1)"

@@ -1,0 +1,48 @@
+name: CD Production
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - uses: azure/setup-kubectl@v3
+      - uses: azure/k8s-set-context@v3
+        with:
+          kubeconfig: ${{ secrets.KUBE_CONFIG }}
+      - name: Build & Push Images
+        run: |
+          for service in auth-service problem-service execution-service leaderboard-service hint-service websocket-service api-gateway; do
+            docker buildx build \
+              -f services/$service/Dockerfile \
+              -t registry.codingchallenge.com/$service:${{ github.sha }} \
+              -t registry.codingchallenge.com/$service:latest \
+              --push .
+          done
+      - name: Deploy to Kubernetes
+        run: |
+          kubectl set image deployment/auth-service auth-service=registry.codingchallenge.com/auth-service:${{ github.sha }} -n coding-challenge
+          kubectl set image deployment/problem-service problem-service=registry.codingchallenge.com/problem-service:${{ github.sha }} -n coding-challenge
+          kubectl set image deployment/execution-service execution-service=registry.codingchallenge.com/execution-service:${{ github.sha }} -n coding-challenge
+          kubectl set image deployment/leaderboard-service leaderboard-service=registry.codingchallenge.com/leaderboard-service:${{ github.sha }} -n coding-challenge
+          kubectl set image deployment/hint-service hint-service=registry.codingchallenge.com/hint-service:${{ github.sha }} -n coding-challenge
+          kubectl set image deployment/websocket-service websocket-service=registry.codingchallenge.com/websocket-service:${{ github.sha }} -n coding-challenge
+      - name: Verify Deployment
+        run: |
+          kubectl rollout status deployment/auth-service -n coding-challenge --timeout=5m
+          kubectl rollout status deployment/problem-service -n coding-challenge --timeout=5m
+          kubectl rollout status deployment/execution-service -n coding-challenge --timeout=5m
+      - name: Smoke Test
+        run: |
+          ENDPOINT="https://api.codingchallenge.com"
+          curl -f $ENDPOINT/health
+          curl -f $ENDPOINT/api/problems
+          curl -f $ENDPOINT/api/leaderboard/weekly

@@ -1,0 +1,176 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: rabbitmq
+  namespace: coding-challange
+  labels:
+    app: rabbitmq
+    app.kubernetes.io/part-of: coding-challange
+    app.kubernetes.io/component: message-queue
+spec:
+  serviceName: rabbitmq-headless
+  replicas: 3
+  selector:
+    matchLabels:
+      app: rabbitmq
+  template:
+    metadata:
+      labels:
+        app: rabbitmq
+        app.kubernetes.io/part-of: coding-challange
+    spec:
+      serviceAccountName: rabbitmq
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: rabbitmq
+          image: rabbitmq:3.12-management-alpine
+          ports:
+            - name: amqp
+              containerPort: 5672
+            - name: management
+              containerPort: 15672
+            - name: prometheus
+              containerPort: 15692
+          env:
+            - name: RABBITMQ_DEFAULT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-secret
+                  key: username
+            - name: RABBITMQ_DEFAULT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-secret
+                  key: password
+            - name: RABBITMQ_ERLANG_COOKIE
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-secret
+                  key: erlang-cookie
+            - name: RABBITMQ_USE_LONGNAME
+              value: "false"
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          livenessProbe:
+            exec:
+              command: ["rabbitmq-diagnostics", "check_running"]
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+          readinessProbe:
+            exec:
+              command: ["rabbitmq-diagnostics", "check_running"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+          volumeMounts:
+            - name: rabbitmq-data
+              mountPath: /var/lib/rabbitmq
+            - name: rabbitmq-config
+              mountPath: /etc/rabbitmq/rabbitmq.conf
+              subPath: rabbitmq.conf
+      volumes:
+        - name: rabbitmq-config
+          configMap:
+            name: rabbitmq-config
+  volumeClaimTemplates:
+    - metadata:
+        name: rabbitmq-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: fast-ssd
+        resources:
+          requests:
+            storage: 10Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq
+  namespace: coding-challange
+  labels:
+    app: rabbitmq
+spec:
+  type: ClusterIP
+  ports:
+    - name: amqp
+      port: 5672
+      targetPort: amqp
+    - name: management
+      port: 15672
+      targetPort: management
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq-headless
+  namespace: coding-challange
+  labels:
+    app: rabbitmq
+spec:
+  clusterIP: None
+  ports:
+    - name: amqp
+      port: 5672
+    - name: management
+      port: 15672
+  selector:
+    app: rabbitmq
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rabbitmq
+  namespace: coding-challange
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: rabbitmq-peer-discovery
+  namespace: coding-challange
+rules:
+  - apiGroups: [""]
+    resources: ["endpoints"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: rabbitmq-peer-discovery
+  namespace: coding-challange
+subjects:
+  - kind: ServiceAccount
+    name: rabbitmq
+    namespace: coding-challange
+roleRef:
+  kind: Role
+  name: rabbitmq-peer-discovery
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: rabbitmq-pdb
+  namespace: coding-challange
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: rabbitmq

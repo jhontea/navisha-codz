@@ -1,0 +1,87 @@
+id: "contains-duplicate"
+title: "Contains Duplicate"
+type: "function"
+difficulty: "easy"
+category: "array"
+tags: ["array", "hash-set", "sorting"]
+
+description: |
+  Given an integer array `nums`, return `true` if any value appears at least
+  twice in the array, and `false` if every element is distinct.
+
+function_name: "containsDuplicate"
+parameters:
+  - name: "nums"
+    type: "[]int"
+    description: "Array of integers"
+return_type: "bool"
+
+examples:
+  - input: "nums = [1,2,3,1]"
+    output: "true"
+    explanation: "The element 1 occurs at indices 0 and 3."
+  - input: "nums = [1,2,3,4]"
+    output: "false"
+    explanation: "All elements are distinct."
+  - input: "nums = [1,1,1,3,3,4,3,2,4,2]"
+    output: "true"
+    explanation: "The elements 1, 2, 3, and 4 all appear multiple times."
+
+hints:
+  - level: 1
+    title: "Hash set"
+    content: "Use a data structure that can quickly tell you if an element has been seen before."
+  - level: 2
+    title: "Track seen elements"
+    content: "Iterate through nums. For each element, check if it's already in a set. If yes, return true. If no, add it to the set."
+  - level: 3
+    title: "Optimization"
+    content: |
+      Alternative approaches:
+      - Sort the array first, then check adjacent elements (O(n log n))
+      - Use a hash set to track seen elements (O(n) time, O(n) space)
+
+template: |
+  func containsDuplicate(nums []int) bool {
+      // Your code here
+      // Hint: Use a map[int]bool to track seen elements
+      // Example usage: seen := make(map[int]bool); seen[num] = true
+      return false
+  }
+
+test_cases:
+  - params: [[[1, 2, 3, 1]]]
+    expected: true
+    description: "Simple duplicate"
+  - params: [[[1, 2, 3, 4]]]
+    expected: false
+    description: "All unique"
+  - params: [[[1, 1, 1, 3, 3, 4, 3, 2, 4, 2]]]
+    expected: true
+    description: "Multiple duplicates"
+  - params: [[[1]]]
+    expected: false
+    description: "Single element"
+
+constraints:
+  - "1 ≤ len(nums) ≤ 10⁵"
+  - "-10⁹ ≤ nums[i] ≤ 10⁹"
+
+time_complexity_hint: "O(n)"
+space_complexity_hint: "O(n)"
+
+solution:
+  code: |
+    func containsDuplicate(nums []int) bool {
+        seen := make(map[int]bool)
+        for _, num := range nums {
+            if seen[num] {
+                return true
+            }
+            seen[num] = true
+        }
+        return false
+    }
+  approach: "Hash set for duplicate detection"
+  time_complexity: "O(n)"
+  space_complexity: "O(n)"

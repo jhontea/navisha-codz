@@ -1,0 +1,332 @@
+# Orchestration Config — Coding Challenge Website
+# Konfigurasi task, acceptance criteria, dan aturan iterasi untuk multi-agent Hermes
+
+board: coding-challenge-dev
+
+# ============================================================
+# AGENT PROFILES
+# ============================================================
+agents:
+  em:
+    profile: em
+    role: orchestrator
+    description: "Engineering Manager — mengorkestrasi seluruh tim"
+    skills:
+      - coding-challenge-em
+    toolsets:
+      - hermes-cli
+      - kanban
+      - file
+      - shell
+
+  architect:
+    profile: architect
+    role: designer
+    description: "Architect — merancang arsitektur sistem"
+    skills:
+      - coding-challenge-architect
+    toolsets:
+      - hermes-cli
+      - kanban
+      - file
+      - shell
+
+  backend:
+    profile: backend
+    role: implementer
+    description: "Backend Engineer — implementasi Go backend"
+    skills:
+      - coding-challenge-backend
+    toolsets:
+      - hermes-cli
+      - kanban
+      - file
+      - shell
+      - docker
+
+  frontend:
+    profile: frontend
+    role: implementer
+    description: "Frontend Engineer — implementasi UI"
+    skills:
+      - coding-challenge-frontend
+    toolsets:
+      - hermes-cli
+      - kanban
+      - file
+      - shell
+
+  qa:
+    profile: qa
+    role: reviewer
+    description: "QA Engineer — testing dan code review"
+    skills:
+      - coding-challenge-qa
+    toolsets:
+      - hermes-cli
+      - kanban
+      - file
+      - shell
+      - docker
+
+# ============================================================
+# WORKFLOW STAGES
+# ============================================================
+stages:
+  - name: architecture
+    description: "Architect merancang design doc"
+    agent: architect
+    next: implementation
+    gate: em_review
+
+  - name: implementation
+    description: "Backend & Frontend implementasi paralel"
+    parallel:
+      - agent: backend
+        tasks:
+          - backend_api
+          - code_runner
+          - problem_loader
+          - hint_system
+      - agent: frontend
+        tasks:
+          - html_templates
+          - code_editor
+          - result_ui
+          - hint_ui
+    next: review
+    gate: qa_review
+
+  - name: review
+    description: "QA review dan testing"
+    agent: qa
+    next: done
+    gate: em_final
+
+  - name: done
+    description: "Semua acceptance criteria terpenuhi"
+    agent: em
+
+# ============================================================
+# TASK DEFINITIONS
+# ============================================================
+tasks:
+  # --- ARCHITECTURE ---
+  architecture:
+    title: "Design system architecture"
+    role: architect
+    priority: critical
+    acceptance_criteria:
+      - "Design doc dalam format Markdown di docs/ARCHITECTURE.md"
+      - "Diagram arsitektur (ASCII atau Mermaid)"
+      - "API endpoint definitions dengan request/response schema"
+      - "Data model definitions (Problem, TestCase, Hint, dll)"
+      - "Problem YAML schema specification"
+      - "Struktur direktori project"
+      - "Tech stack justification (Go + Gin, SQLite, Docker)"
+    deliverables:
+      - "docs/ARCHITECTURE.md"
+      - "docs/PROBLEM_SCHEMA.md"
+      - "docs/API.md"
+
+  # --- BACKEND TASKS ---
+  backend_api:
+    title: "Implement backend API endpoints"
+    role: backend
+    priority: high
+    acceptance_criteria:
+      - "GET /api/problems — list semua problem (summary)"
+      - "GET /api/problems/:id — detail problem (tanpa solution)"
+      - "POST /api/problems/:id/run — submit & run code"
+      - "GET /api/problems/:id/hints — get hints"
+      - "GET /health — health check"
+      - "Proper error handling dengan HTTP status codes"
+      - "Input validation"
+    deliverables:
+      - "internal/handler/*.go"
+      - "internal/service/problem.go"
+      - "cmd/server/main.go"
+
+  code_runner:
+    title: "Implement Docker-sandboxed code runner"
+    role: backend
+    priority: high
+    acceptance_criteria:
+      - "Code runner mengeksekusi Go code dalam Docker container"
+      - "Sandbox: no network, read-only, memory limit, CPU limit"
+      - "Timeout handling (default 10 detik)"
+      - "Test case validation: compare output dengan expected"
+      - "Return structured result (pass/fail per test case)"
+      - "Fallback: local runner jika Docker tidak tersedia"
+    deliverables:
+      - "internal/service/runner.go"
+      - "runner/Dockerfile.runner"
+
+  problem_loader:
+    title: "Implement problem YAML loader"
+    role: backend
+    priority: high
+    acceptance_criteria:
+      - "Load semua YAML files dari problems/ directory"
+      - "Support sub-directories (easy/, medium/, hard/)"
+      - "Cache problems di memory"
+      - "Sort by difficulty then title"
+      - "Filter by difficulty dan category"
+      - "Reload capability (hot reload)"
+    deliverables:
+      - "internal/repository/problem.go"
+      - "internal/model/problem.go"
+
+  hint_system:
+    title: "Implement progressive hint system"
+    role: backend
+    priority: medium
+    acceptance_criteria:
+      - "Hints di-load dari problem YAML"
+      - "Progressive reveal: Hint 1 → Hint 2 → Solution approach"
+      - "API endpoint untuk get hints by problem ID"
+      - "Hint tidak expose solution code"
+    deliverables:
+      - "internal/service/hint.go"
+
+  # --- FRONTEND TASKS ---
+  html_templates:
+    title: "Create HTML templates"
+    role: frontend
+    priority: high
+    acceptance_criteria:
+      - "index.html — landing page dengan problem list"
+      - "problem.html — problem detail dengan code editor"
+      - "Semantic HTML5"
+      - "Responsive design"
+      - "Clean, learning-focused UI"
+    deliverables:
+      - "web/templates/index.html"
+      - "web/templates/problem.html"
+
+  code_editor:
+    title: "Integrate CodeMirror editor"
+    role: frontend
+    priority: high
+    acceptance_criteria:
+      - "CodeMirror editor dengan Go syntax highlighting"
+      - "Line numbers"
+      - "Auto-indent"
+      - "Submit button"
+      - "Reset button (restore template)"
+    deliverables:
+      - "web/static/js/editor.js"
+      - "web/static/css/editor.css"
+
+  result_ui:
+    title: "Implement test result display"
+    role: frontend
+    priority: high
+    acceptance_criteria:
+      - "Display pass/fail per test case"
+      - "Show expected vs actual output"
+      - "Show compilation errors"
+      - "Show execution output"
+      - "Progress bar (X/Y tests passed)"
+    deliverables:
+      - "web/static/js/result.js"
+
+  hint_ui:
+    title: "Implement hint reveal UI"
+    role: frontend
+    priority: medium
+    acceptance_criteria:
+      - "Progressive hint reveal (click to show next hint)"
+      - "Warning: 'Are you sure you want to see the next hint?'"
+      - "Hint counter (Hint 1 of 3)"
+      - "Solution approach sebagai hint terakhir"
+    deliverables:
+      - "web/static/js/hint.js"
+
+  # --- QA TASKS ---
+  qa_test_plan:
+    title: "Write test plan and test cases"
+    role: qa
+    priority: high
+    acceptance_criteria:
+      - "Test plan document di docs/TEST_PLAN.md"
+      - "Unit test untuk problem loader"
+      - "Unit test untuk hint service"
+      - "Integration test untuk API endpoints"
+      - "Test untuk code runner (valid code, invalid code, timeout)"
+      - "Edge case tests (empty input, invalid YAML, missing fields)"
+    deliverables:
+      - "docs/TEST_PLAN.md"
+      - "tests/*_test.go"
+
+  qa_code_review:
+    title: "Code review backend & frontend"
+    role: qa
+    priority: high
+    acceptance_criteria:
+      - "Review semua Go files untuk best practices"
+      - "Review error handling"
+      - "Review security (sandbox isolation, input validation)"
+      - "Review frontend accessibility"
+      - "Code review report di docs/CODE_REVIEW.md"
+    deliverables:
+      - "docs/CODE_REVIEW.md"
+
+# ============================================================
+# ITERATION RULES
+# ============================================================
+iteration:
+  max_iterations: 5
+  rules:
+    - "QA membuat bug card untuk setiap failing test"
+    - "Bug card di-route ke engineer yang sesuai (backend/frontend)"
+    - "Engineer fix → resubmit untuk review"
+    - "QA re-review fix"
+    - "Iterasi berlanjut sampai semua test pass ATAU max_iterations tercapai"
+    - "Jika max_iterations tercapai tanpa pass, EM escalate ke human"
+
+# ============================================================
+# GATE RULES
+# ============================================================
+gates:
+  em_review:
+    description: "EM review architecture design sebelum implementation"
+    type: human
+    notify: telegram
+    actions:
+      - approve
+      - modify
+      - shelve
+
+  qa_review:
+    description: "QA review implementation sebelum mark done"
+    type: automated
+    actions:
+      - pass
+      - fail
+
+  em_final:
+    description: "EM final gate check — semua acceptance criteria"
+    type: human
+    notify: telegram
+    actions:
+      - ship
+      - iterate
+      - escalate
+
+# ============================================================
+# COMMUNICATION
+# ============================================================
+communication:
+  board: coding-challenge-dev
+  notify_channel: telegram
+  progress_updates: true
+  update_interval: "each_stage"
+
+# ============================================================
+# WORKSPACE
+# ============================================================
+workspace:
+  type: dir
+  path: /mnt/c/Users/PC/go/src/project/coding-challange
+  # Persistent workspace — jangan gunakan scratch untuk implementation tasks

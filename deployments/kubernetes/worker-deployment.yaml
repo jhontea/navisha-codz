@@ -1,0 +1,229 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: execution-worker
+  namespace: coding-challange
+  labels:
+    app: execution-worker
+    app.kubernetes.io/part-of: coding-challange
+    app.kubernetes.io/component: worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: execution-worker
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: execution-worker
+        app.kubernetes.io/part-of: coding-challange
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9106"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: execution-worker
+      terminationGracePeriodSeconds: 60
+      
+      # Security context
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      
+      containers:
+        - name: execution-worker
+          image: coding-challange/execution-worker:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 9106
+              protocol: TCP
+          
+          # Environment variables
+          env:
+            - name: PORT
+              value: "9106"
+            - name: SERVICE_NAME
+              value: "execution-worker"
+            - name: DB_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: host
+            - name: DB_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: port
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: username
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: password
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: database
+            - name: REDIS_ADDR
+              valueFrom:
+                secretKeyRef:
+                  name: redis-secret
+                  key: addr
+            - name: RABBITMQ_HOST
+              value: "rabbitmq"
+            - name: RABBITMQ_PORT
+              value: "5672"
+            - name: RABBITMQ_USER
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-secret
+                  key: username
+            - name: RABBITMQ_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-secret
+                  key: password
+            - name: SANDBOX_IMAGE
+              value: "coding-challange/sandbox-runner:latest"
+            - name: SANDBOX_MEMORY_MB
+              value: "256"
+            - name: SANDBOX_TIME_SEC
+              value: "10"
+            - name: ENABLE_LOCAL_FALLBACK
+              value: "false"
+            - name: LOG_LEVEL
+              value: "info"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          
+          # Resource limits
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "512Mi"
+          
+          # Health checks
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          
+          # Lifecycle hooks
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 10"]
+      
+      # Spread across nodes
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: execution-worker
+
+---
+# ServiceAccount for execution worker
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: execution-worker
+  namespace: coding-challange
+  labels:
+    app: execution-worker
+
+---
+# Horizontal Pod Autoscaler
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: execution-worker-hpa
+  namespace: coding-challange
+  labels:
+    app: execution-worker
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: execution-worker
+  minReplicas: 2
+  maxReplicas: 20
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+    - type: Pods
+      pods:
+        metric:
+          name: rabbitmq_queue_depth
+        target:
+          type: AverageValue
+          averageValue: "50"
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+        - type: Pods
+          value: 4
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 120
+
+---
+# Pod Disruption Budget
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: execution-worker-pdb
+  namespace: coding-challange
+  labels:
+    app: execution-worker
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: execution-worker

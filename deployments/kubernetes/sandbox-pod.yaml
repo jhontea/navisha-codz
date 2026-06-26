@@ -1,0 +1,215 @@
+# Kubernetes Pod Spec for Code Execution Sandbox
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sandbox
+  labels:
+    name: sandbox
+    app.kubernetes.io/part-of: coding-challange
+---
+# Network Policy - Deny all egress by default
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sandbox-deny-all-egress
+  namespace: sandbox
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress: [] # Deny all outbound traffic
+---
+# Allow DNS resolution only
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sandbox-allow-dns
+  namespace: sandbox
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# Resource Quota for sandbox namespace
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: sandbox-quota
+  namespace: sandbox
+spec:
+  hard:
+    requests.cpu: "10"
+    requests.memory: 10Gi
+    limits.cpu: "20"
+    limits.memory: 20Gi
+    pods: "50"
+---
+# Sandbox Pod Template (per difficulty)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sandbox-{{SUBMISSION_ID}}
+  namespace: sandbox
+  labels:
+    app: code-execution
+    submission-id: "{{SUBMISSION_ID}}"
+    difficulty: "{{DIFFICULTY}}"
+  annotations:
+    container.apparmor.security.beta.kubernetes.io/sandbox: runtime/default
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  terminationGracePeriodSeconds: 30
+
+  # Security context at pod level
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+
+  containers:
+    - name: sandbox
+      image: coding-challange/sandbox-runner:latest
+      imagePullPolicy: Always
+
+      # Resource limits vary by difficulty
+      resources:
+        requests:
+          cpu: "100m"
+          memory: "64Mi"
+        limits:
+          cpu: "{{CPU_LIMIT}}"
+          memory: "{{MEMORY_LIMIT}}"
+
+      # Security context at container level
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop:
+            - ALL
+
+      # Environment variables
+      env:
+        - name: SUBMISSION_ID
+          value: "{{SUBMISSION_ID}}"
+        - name: LANGUAGE
+          value: "{{LANGUAGE}}"
+        - name: TIME_LIMIT_SECONDS
+          value: "{{TIME_LIMIT}}"
+        - name: MEMORY_LIMIT_MB
+          value: "{{MEMORY_LIMIT_MB}}"
+
+      # Volume mounts
+      volumeMounts:
+        - name: code-volume
+          mountPath: /app/code
+          readOnly: false
+        - name: tmp-volume
+          mountPath: /tmp
+          readOnly: false
+        - name: output-volume
+          mountPath: /app/output
+          readOnly: false
+
+      # Liveness probe - kill if stuck
+      livenessProbe:
+        exec:
+          command:
+            - /bin/sh
+            - -c
+            - "test -f /app/output/result.json || test $(date +%s) -lt {{DEADLINE}}"
+        initialDelaySeconds: 5
+        periodSeconds: 5
+        failureThreshold: 3
+
+  # Volumes
+  volumes:
+    - name: code-volume
+      emptyDir:
+        sizeLimit: 10Mi
+    - name: tmp-volume
+      emptyDir:
+        sizeLimit: 50Mi
+    - name: output-volume
+      emptyDir:
+        sizeLimit: 10Mi
+
+  # Node selector (optional - can target specific node pools)
+  nodeSelector:
+    workload-type: sandbox
+
+  # Tolerations for sandbox workloads
+  tolerations:
+    - key: "sandbox"
+      operator: "Equal"
+      value: "true"
+      effect: "NoSchedule"
+
+  # DNS policy
+  dnsPolicy: ClusterFirst
+  dnsConfig:
+    options:
+      - name: ndots
+        value: "1"
+      - name: single-request-reopen
+---
+# Example resource limits per difficulty:
+#
+# Easy:
+#   CPU_LIMIT: "500m"
+#   MEMORY_LIMIT: "128Mi"
+#   MEMORY_LIMIT_MB: "128"
+#   TIME_LIMIT: "5"
+#
+# Medium:
+#   CPU_LIMIT: "1000m"
+#   MEMORY_LIMIT: "256Mi"
+#   MEMORY_LIMIT_MB: "256"
+#   TIME_LIMIT: "10"
+#
+# Hard:
+#   CPU_LIMIT: "2000m"
+#   MEMORY_LIMIT: "512Mi"
+#   MEMORY_LIMIT_MB: "512"
+#   TIME_LIMIT: "30"
+---
+# ServiceAccount for sandbox runner (minimal permissions)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sandbox-runner
+  namespace: sandbox
+automountServiceAccountToken: false
+---
+# RBAC - minimal role for sandbox
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: sandbox-runner-role
+  namespace: sandbox
+rules: [] # No permissions needed - sandbox is isolated
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: sandbox-runner-binding
+  namespace: sandbox
+subjects:
+  - kind: ServiceAccount
+    name: sandbox-runner
+    namespace: sandbox
+roleRef:
+  kind: Role
+  name: sandbox-runner-role
+  apiGroup: rbac.authorization.k8s.io

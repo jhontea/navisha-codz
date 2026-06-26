@@ -1,0 +1,38 @@
+groups:
+  - name: service-status
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "{{ $labels.job }} has been down for more than 1 minute."
+
+      - alert: HighLatency
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High latency detected on {{ $labels.job }}"
+          description: "P95 latency is {{ $value }}s"
+
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate on {{ $labels.job }}"
+          description: "Error rate is {{ $value | humanizePercentage }}"
+
+      - alert: QueueBacklog
+        expr: rabbitmq_queue_messages_ready > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Queue backlog on {{ $labels.queue }}"
+          description: "{{ $labels.queue }} has {{ $value }} ready messages"

@@ -1,0 +1,354 @@
+version: '3.8'
+
+x-common-env: &common-env
+  DB_HOST: postgres
+  DB_PORT: 5432
+  DB_USER: postgres
+  DB_PASSWORD: postgres
+  DB_NAME: coding_challange
+  REDIS_ADDR: redis:6379
+  JWT_ACCESS_SECRET: dev-access-secret-key
+  JWT_REFRESH_SECRET: dev-refresh-secret-key
+
+x-service-defaults: &service-defaults
+  build:
+    context: .
+    dockerfile: services/${SERVICE_NAME}/Dockerfile
+  restart: unless-stopped
+  networks:
+    - coding-challange
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+  # ============================================
+  # Infrastructure Services
+  # ============================================
+
+  # PostgreSQL
+  postgres:
+    image: postgres:15-alpine
+    container_name: coding-challange-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: coding_challange
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=en_US.UTF-8 --lc-ctype=en_US.UTF-8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./internal/repository/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d coding_challange"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - coding-challange
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: coding-challange-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - coding-challange
+
+  # RabbitMQ
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: coding-challange-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_running"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    networks:
+      - coding-challange
+
+  # ============================================
+  # Application Services
+  # ============================================
+
+  # Auth Service
+  auth-service:
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile
+    container_name: coding-challange-auth
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      PORT: 8081
+      JWT_ACCESS_TTL_MIN: 15
+      JWT_REFRESH_TTL_HOURS: 168
+    ports:
+      - "9101:9101"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - coding-challange
+
+  # Problem Service
+  problem-service:
+    build:
+      context: .
+      dockerfile: services/problem-service/Dockerfile
+    container_name: coding-challange-problem
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      PORT: 8082
+    ports:
+      - "9102:9102"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - coding-challange
+
+  # Execution Service
+  execution-service:
+    build:
+      context: .
+      dockerfile: services/execution-service/Dockerfile
+    container_name: coding-challange-execution
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      PORT: 8083
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
+    ports:
+      - "9103:9103"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - coding-challange
+
+  # Execution Worker
+  execution-worker:
+    build:
+      context: .
+      dockerfile: services/execution-worker/Dockerfile
+    container_name: coding-challange-worker
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      PORT: 8086
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
+      SANDBOX_IMAGE: coding-challange/sandbox-runner:latest
+      SANDBOX_MEMORY_MB: 256
+      SANDBOX_TIME_SEC: 10
+      ENABLE_LOCAL_FALLBACK: "true"
+      LOG_LEVEL: debug
+    ports:
+      - "9106:9106"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      # Hot reload: mount the source code
+      - ./services/execution-worker:/app/services/execution-worker:ro
+      - ./pkg:/app/pkg:ro
+      # Docker socket for sandbox execution (optional)
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - coding-challange
+
+  # WebSocket Service
+  websocket-service:
+    build:
+      context: .
+      dockerfile: services/websocket-service/Dockerfile
+    container_name: coding-challange-websocket
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      PORT: 9107
+      LOG_LEVEL: debug
+    ports:
+      - "9107:9107"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      # Hot reload
+      - ./services/websocket-service:/app/services/websocket-service:ro
+      - ./pkg:/app/pkg:ro
+    networks:
+      - coding-challange
+
+  # Leaderboard Service
+  leaderboard-service:
+    build:
+      context: .
+      dockerfile: services/leaderboard-service/Dockerfile
+    container_name: coding-challange-leaderboard
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      PORT: 8084
+    ports:
+      - "9104:9104"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - coding-challange
+
+  # Hint Service
+  hint-service:
+    build:
+      context: .
+      dockerfile: services/hint-service/Dockerfile
+    container_name: coding-challange-hint
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      PORT: 8085
+    ports:
+      - "9105:9105"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - coding-challange
+
+  # ============================================
+  # Gateway
+  # ============================================
+
+  # API Gateway (Nginx-based)
+  api-gateway:
+    image: nginx:alpine
+    container_name: coding-challange-gateway
+    restart: unless-stopped
+    ports:
+      - "9100:80"
+    volumes:
+      - ./services/api-gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - auth-service
+      - problem-service
+      - execution-service
+      - leaderboard-service
+      - hint-service
+      - websocket-service
+    networks:
+      - coding-challange
+
+  # ============================================
+  # Observability (Optional)
+  # ============================================
+
+  # Prometheus metrics (optional)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: coding-challange-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./deployments/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=7d'
+    networks:
+      - coding-challange
+    profiles:
+      - monitoring
+
+  # Grafana dashboards (optional)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: coding-challange-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - coding-challange
+    profiles:
+      - monitoring
+
+# ============================================
+# Volumes
+# ============================================
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  rabbitmq_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+# ============================================
+# Networks
+# ============================================
+networks:
+  coding-challange:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

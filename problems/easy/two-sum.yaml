@@ -1,0 +1,94 @@
+id: "two-sum"
+title: "Two Sum"
+type: "function"
+difficulty: "easy"
+category: "array"
+tags: ["hash-map", "array"]
+
+description: |
+  Given an array of integers `nums` and an integer `target`, return indices
+  of the two numbers such that they add up to `target`.
+
+  You may assume that each input would have exactly one solution, and you
+  may not use the same element twice.
+
+function_name: "twoSum"
+parameters:
+  - name: "nums"
+    type: "[]int"
+    description: "Array of integers"
+  - name: "target"
+    type: "int"
+    description: "Target sum"
+return_type: "[]int"
+
+examples:
+  - input: "nums = [2,7,11,15], target = 9"
+    output: "[0,1]"
+    explanation: "nums[0] + nums[1] = 2 + 7 = 9, so we return [0, 1]."
+  - input: "nums = [3,2,4], target = 6"
+    output: "[1,2]"
+    explanation: "nums[1] + nums[2] = 2 + 4 = 6, so we return [1, 2]."
+
+hints:
+  - level: 1
+    title: "Use extra memory"
+    content: "Can you use a data structure to remember what you've seen so far?"
+  - level: 2
+    title: "Hash map approach"
+    content: "For each element x, check if (target - x) exists in a map you've built."
+  - level: 3
+    title: "One-pass hash map"
+    content: |
+      Iterate through nums once. For each num:
+      1. Compute complement = target - num
+      2. If complement in current map, return [map[complement], i]
+      3. Otherwise add num → i to map
+
+template: |
+  func twoSum(nums []int, target int) []int {
+      // Your code here
+      return nil
+  }
+
+test_cases:
+  - params: [[2, 7, 11, 15], 9]
+    expected: [0, 1]
+    description: "Basic case with positive numbers"
+  - params: [[3, 2, 4], 6]
+    expected: [1, 2]
+    description: "Non-adjacent elements"
+  - params: [[3, 3], 6]
+    expected: [0, 1]
+    description: "Duplicate values"
+  - params: [[-1, -2, -3, -4, -5], -8]
+    expected: [2, 4]
+    description: "Negative numbers"
+  - params: [[0, 4, 3, 0], 0]
+    expected: [0, 3]
+    description: "Zeros in input"
+
+constraints:
+  - "2 ≤ len(nums) ≤ 10⁴"
+  - "-10⁹ ≤ nums[i] ≤ 10⁹"
+  - "-10⁹ ≤ target ≤ 10⁹"
+  - "Only one valid answer exists."
+
+time_complexity_hint: "O(n)"
+space_complexity_hint: "O(n)"
+
+solution:
+  code: |
+    func twoSum(nums []int, target int) []int {
+        seen := make(map[int]int)
+        for i, num := range nums {
+            if j, ok := seen[target-num]; ok {
+                return []int{j, i}
+            }
+            seen[num] = i
+        }
+        return nil
+    }
+  approach: "Single-pass hash map"
+  time_complexity: "O(n)"
+  space_complexity: "O(n)"

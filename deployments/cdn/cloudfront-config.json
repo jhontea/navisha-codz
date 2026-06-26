@@ -1,0 +1,360 @@
+{
+  "comment": "CloudFront Distribution for Coding Challenge Platform - Static Assets CDN",
+  "enabled": true,
+  "priceClass": "PriceClass_All",
+  "httpVersion": "http2and3",
+  "aliases": {
+    "quantity": 2,
+    "items": [
+      "assets.coding-challenge.com",
+      "cdn.coding-challenge.com"
+    ]
+  },
+  "origins": {
+    "quantity": 3,
+    "items": [
+      {
+        "id": "S3-StaticAssets",
+        "domainName": "coding-challenge-static-assets.s3.amazonaws.com",
+        "originPath": "/prod",
+        "customOriginConfig": null,
+        "s3OriginConfig": {
+          "originAccessIdentity": "origin-access-identity/cloudfront/EXAMPLE12345"
+        },
+        "connectionAttempts": 3,
+        "connectionTimeout": 10,
+        "originShield": {
+          "enabled": true,
+          "originShieldRegion": "us-east-1"
+        }
+      },
+      {
+        "id": "S3-StaticAssets-Fallback",
+        "domainName": "coding-challenge-static-assets-backup.s3.amazonaws.com",
+        "originPath": "/prod",
+        "customOriginConfig": null,
+        "s3OriginConfig": {
+          "originAccessIdentity": "origin-access-identity/cloudfront/EXAMPLE12345"
+        },
+        "connectionAttempts": 3,
+        "connectionTimeout": 10
+      },
+      {
+        "id": "API-Gateway-CustomOrigin",
+        "domainName": "api.coding-challenge.com",
+        "originPath": "",
+        "customOriginConfig": {
+          "httpPort": 80,
+          "httpsPort": 443,
+          "originProtocolPolicy": "https-only",
+          "originSslProtocols": {
+            "quantity": 2,
+            "items": ["TLSv1.2", "TLSv1.3"]
+          },
+          "originReadTimeout": 30,
+          "originKeepaliveTimeout": 5
+        },
+        "connectionAttempts": 3,
+        "connectionTimeout": 10
+      }
+    ]
+  },
+  "defaultCacheBehavior": {
+    "targetOriginId": "S3-StaticAssets",
+    "viewerProtocolPolicy": "redirect-to-https",
+    "allowedMethods": {
+      "quantity": 3,
+      "items": ["GET", "HEAD", "OPTIONS"],
+      "cachedMethods": {
+        "quantity": 3,
+        "items": ["GET", "HEAD", "OPTIONS"]
+      }
+    },
+    "smoothStreaming": false,
+    "compress": true,
+    "lambdaFunctionAssociations": {
+      "quantity": 0,
+      "items": []
+    },
+    "functionAssociations": {
+      "quantity": 1,
+      "items": [
+        {
+          "functionARN": "arn:aws:cloudfront::123456789012:function/security-headers",
+          "eventType": "viewer-response"
+        }
+      ]
+    },
+    "defaultTTL": 86400,
+    "minTTL": 0,
+    "maxTTL": 31536000,
+    "forwardedValues": {
+      "queryString": true,
+      "queryStringCacheKeys": {
+        "quantity": 2,
+        "items": ["v", "version"]
+      },
+      "cookies": {
+        "forward": "none"
+      },
+      "headers": {
+        "quantity": 4,
+        "items": [
+          "Origin",
+          "Access-Control-Request-Headers",
+          "Access-Control-Request-Method",
+          "Accept"
+        ]
+      }
+    },
+    "trustedKeyGroups": {
+      "enabled": false,
+      "quantity": 0
+    },
+    "trustedSigners": {
+      "enabled": false,
+      "quantity": 0
+    }
+  },
+  "cacheBehaviors": {
+    "quantity": 6,
+    "items": [
+      {
+        "pathPattern": "/assets/images/*",
+        "targetOriginId": "S3-StaticAssets",
+        "viewerProtocolPolicy": "redirect-to-https",
+        "allowedMethods": {
+          "quantity": 3,
+          "items": ["GET", "HEAD", "OPTIONS"],
+          "cachedMethods": {
+            "quantity": 3,
+            "items": ["GET", "HEAD", "OPTIONS"]
+          }
+        },
+        "compress": true,
+        "defaultTTL": 31536000,
+        "minTTL": 0,
+        "maxTTL": 31536000,
+        "forwardedValues": {
+          "queryString": false,
+          "cookies": { "forward": "none" },
+          "headers": { "quantity": 0, "items": [] }
+        }
+      },
+      {
+        "pathPattern": "/assets/css/*",
+        "targetOriginId": "S3-StaticAssets",
+        "viewerProtocolPolicy": "redirect-to-https",
+        "allowedMethods": {
+          "quantity": 3,
+          "items": ["GET", "HEAD", "OPTIONS"],
+          "cachedMethods": {
+            "quantity": 3,
+            "items": ["GET", "HEAD", "OPTIONS"]
+          }
+        },
+        "compress": true,
+        "defaultTTL": 31536000,
+        "minTTL": 0,
+        "maxTTL": 31536000,
+        "forwardedValues": {
+          "queryString": false,
+          "cookies": { "forward": "none" },
+          "headers": { "quantity": 0, "items": [] }
+        }
+      },
+      {
+        "pathPattern": "/assets/js/*",
+        "targetOriginId": "S3-StaticAssets",
+        "viewerProtocolPolicy": "redirect-to-https",
+        "allowedMethods": {
+          "quantity": 3,
+          "items": ["GET", "HEAD", "OPTIONS"],
+          "cachedMethods": {
+            "quantity": 3,
+            "items": ["GET", "HEAD", "OPTIONS"]
+          }
+        },
+        "compress": true,
+        "defaultTTL": 31536000,
+        "minTTL": 0,
+        "maxTTL": 31536000,
+        "forwardedValues": {
+          "queryString": false,
+          "cookies": { "forward": "none" },
+          "headers": { "quantity": 0, "items": [] }
+        }
+      },
+      {
+        "pathPattern": "/assets/fonts/*",
+        "targetOriginId": "S3-StaticAssets",
+        "viewerProtocolPolicy": "redirect-to-https",
+        "allowedMethods": {
+          "quantity": 3,
+          "items": ["GET", "HEAD", "OPTIONS"],
+          "cachedMethods": {
+            "quantity": 3,
+            "items": ["GET", "HEAD", "OPTIONS"]
+          }
+        },
+        "compress": true,
+        "defaultTTL": 31536000,
+        "minTTL": 0,
+        "maxTTL": 31536000,
+        "forwardedValues": {
+          "queryString": false,
+          "cookies": { "forward": "none" },
+          "headers": { "quantity": 0, "items": [] }
+        }
+      },
+      {
+        "pathPattern": "/favicon.ico",
+        "targetOriginId": "S3-StaticAssets",
+        "viewerProtocolPolicy": "redirect-to-https",
+        "allowedMethods": {
+          "quantity": 3,
+          "items": ["GET", "HEAD", "OPTIONS"],
+          "cachedMethods": {
+            "quantity": 3,
+            "items": ["GET", "HEAD", "OPTIONS"]
+          }
+        },
+        "compress": true,
+        "defaultTTL": 2592000,
+        "minTTL": 0,
+        "maxTTL": 31536000,
+        "forwardedValues": {
+          "queryString": false,
+          "cookies": { "forward": "none" },
+          "headers": { "quantity": 0, "items": [] }
+        }
+      },
+      {
+        "pathPattern": "/api/*",
+        "targetOriginId": "API-Gateway-CustomOrigin",
+        "viewerProtocolPolicy": "https-only",
+        "allowedMethods": {
+          "quantity": 7,
+          "items": ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"],
+          "cachedMethods": {
+            "quantity": 2,
+            "items": ["GET", "HEAD"]
+          }
+        },
+        "compress": true,
+        "defaultTTL": 0,
+        "minTTL": 0,
+        "maxTTL": 86400,
+        "forwardedValues": {
+          "queryString": true,
+          "cookies": { "forward": "all" },
+          "headers": {
+            "quantity": 5,
+            "items": [
+              "Authorization",
+              "Content-Type",
+              "X-Request-ID",
+              "X-Trace-ID",
+              "X-Device-Fingerprint"
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "customErrorResponses": {
+    "quantity": 4,
+    "items": [
+      {
+        "errorCode": 403,
+        "responsePagePath": "/errors/403.html",
+        "responseCode": 403,
+        "errorCachingMinTTL": 10
+      },
+      {
+        "errorCode": 404,
+        "responsePagePath": "/errors/404.html",
+        "responseCode": 404,
+        "errorCachingMinTTL": 10
+      },
+      {
+        "errorCode": 500,
+        "responsePagePath": "/errors/500.html",
+        "responseCode": 500,
+        "errorCachingMinTTL": 60
+      },
+      {
+        "errorCode": 502,
+        "responsePagePath": "/errors/502.html",
+        "responseCode": 502,
+        "errorCachingMinTTL": 60
+      }
+    ]
+  },
+  "originFailover": {
+    "statusCodes": {
+      "quantity": 4,
+      "items": [500, 502, 503, 504]
+    },
+    "originGroups": {
+      "quantity": 1,
+      "items": [
+        {
+          "id": "S3-Failover-Group",
+          "failoverCriteria": {
+            "statusCodes": {
+              "quantity": 4,
+              "items": [500, 502, 503, 504]
+            }
+          },
+          "members": {
+            "quantity": 2,
+            "items": [
+              {
+                "originId": "S3-StaticAssets"
+              },
+              {
+                "originId": "S3-StaticAssets-Fallback"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "logging": {
+    "enabled": true,
+    "bucket": "coding-challenge-cdn-logs.s3.amazonaws.com",
+    "prefix": "cloudfront/",
+    "includeCookies": false
+  },
+  "restrictions": {
+    "geoRestriction": {
+      "restrictionType": "none",
+      "quantity": 0
+    }
+  },
+  "viewerCertificate": {
+    "cloudFrontDefaultCertificate": false,
+    "acmCertificateArn": "arn:aws:acm:us-east-1:123456789012:certificate/abcdef12-3456-7890-abcd-ef1234567890",
+    "sslSupportMethod": "sni-only",
+    "minimumProtocolVersion": "TLSv1.2_2021"
+  },
+  "webACLId": "",
+  "isIPV6Enabled": true,
+  "defaultRootObject": "index.html",
+  "tags": [
+    {
+      "key": "Environment",
+      "value": "Production"
+    },
+    {
+      "key": "Project",
+      "value": "CodingChallenge"
+    },
+    {
+      "key": "ManagedBy",
+      "value": "Terraform"
+    }
+  ]
+}

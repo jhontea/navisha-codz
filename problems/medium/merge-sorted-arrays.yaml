@@ -1,0 +1,105 @@
+id: "merge-sorted-arrays"
+title: "Merge Sorted Array"
+type: "function"
+difficulty: "medium"
+category: "array"
+tags: ["array", "two-pointers", "sorting"]
+
+description: |
+  You are given two integer arrays `nums1` and `nums2`, sorted in non-decreasing order,
+  and two integers `m` and `n`, representing the number of elements in `nums1` and `nums2`
+  respectively.
+
+  Merge `nums1` and `nums2` into a single array sorted in non-decreasing order.
+
+  The final sorted array should not be returned by the function, but instead be stored
+  inside the array `nums1`. To accommodate this, `nums1` has a length of `m + n`, where
+  the first `m` elements denote the elements that should be merged, and the last `n` elements
+  are set to 0 and should be ignored. `nums2` has a length of `n`.
+
+function_name: "merge"
+parameters:
+  - name: "nums1"
+    type: "[]int"
+    description: "First sorted array with length m+n, last n elements are 0"
+  - name: "m"
+    type: "int"
+    description: "Number of valid elements in nums1"
+  - name: "nums2"
+    type: "[]int"
+    description: "Second sorted array"
+  - name: "n"
+    type: "int"
+    description: "Number of elements in nums2"
+return_type: "void"
+
+examples:
+  - input: "nums1 = [1,2,3,0,0,0], m = 3, nums2 = [2,5,6], n = 3"
+    output: "[1,2,2,3,5,6]"
+    explanation: "Merging [1,2,3] and [2,5,6] gives [1,2,2,3,5,6]."
+  - input: "nums1 = [1], m = 1, nums2 = [], n = 0"
+    output: "[1]"
+  - input: "nums1 = [0], m = 0, nums2 = [1], n = 1"
+    output: "[1]"
+
+hints:
+  - level: 1
+    title: "Work backwards"
+    content: "Instead of merging from the front, try merging from the back to avoid overwriting."
+  - level: 2
+    title: "Three pointers"
+    content: "Use pointers at the end of valid elements in nums1, end of nums2, and end of nums1 array."
+  - level: 3
+    title: "Fill from the end"
+    content: |
+      Start from index m+n-1. Compare nums1[m-1] and nums2[n-1], place larger at end.
+      Decrement pointers accordingly. If nums2 still has elements, copy them over.
+
+template: |
+  func merge(nums1 []int, m int, nums2 []int, n int) {
+      // Your code here
+      // Modify nums1 in-place
+  }
+
+test_cases:
+  - params: [[1, 2, 3, 0, 0, 0], 3, [2, 5, 6], 3]
+    expected: [1, 2, 2, 3, 5, 6]
+    description: "Standard merge"
+  - params: [[1], 1, [], 0]
+    expected: [1]
+    description: "nums2 is empty"
+  - params: [[0], 0, [1], 1]
+    expected: [1]
+    description: "nums1 has no valid elements"
+  - params: [[2, 0], 1, [1], 1]
+    expected: [1, 2]
+    description: "Single element each, nums2 smaller"
+
+constraints:
+  - "len(nums1) == m + n"
+  - "len(nums2) == n"
+  - "0 ≤ m, n ≤ 200"
+  - "1 ≤ m + n ≤ 200"
+  - "-10⁹ ≤ nums1[i], nums2[j] ≤ 10⁹"
+
+time_complexity_hint: "O(m + n)"
+space_complexity_hint: "O(1)"
+
+solution:
+  code: |
+    func merge(nums1 []int, m int, nums2 []int, n int) {
+        i, j, k := m-1, n-1, m+n-1
+        for j >= 0 {
+            if i >= 0 && nums1[i] > nums2[j] {
+                nums1[k] = nums1[i]
+                i--
+            } else {
+                nums1[k] = nums2[j]
+                j--
+            }
+            k--
+        }
+    }
+  approach: "Three-pointer reverse merge"
+  time_complexity: "O(m + n)"
+  space_complexity: "O(1)"

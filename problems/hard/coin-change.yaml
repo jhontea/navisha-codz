@@ -1,0 +1,115 @@
+id: "coin-change"
+title: "Coin Change"
+type: "function"
+difficulty: "hard"
+category: "array"
+tags: ["dynamic-programming", "array", "breadth-first-search"]
+
+description: |
+  You are given an integer array `coins` representing coins of different
+  denominations and an integer `amount` representing a total amount of money.
+
+  Return the fewest number of coins that you need to make up that amount.
+  If that amount of money cannot be made up by any combination of the coins,
+  return -1.
+
+  You may assume that you have an infinite number of each kind of coin.
+
+function_name: "coinChange"
+parameters:
+  - name: "coins"
+    type: "[]int"
+    description: "Array of coin denominations"
+  - name: "amount"
+    type: "int"
+    description: "Target amount to make change for"
+return_type: "int"
+
+examples:
+  - input: "coins = [1,5,11], amount = 11"
+    output: "1"
+    explanation: "11 = 11 (one coin of denomination 11)"
+  - input: "coins = [2], amount = 3"
+    output: "-1"
+    explanation: "Cannot make amount 3 with only 2-denomination coins."
+  - input: "coins = [1], amount = 0"
+    output: "0"
+    explanation: "Amount 0 requires 0 coins."
+
+hints:
+  - level: 1
+    title: "Dynamic programming"
+    content: "Think about building up from smaller amounts. For each amount from 1 to target, what's the minimum coins needed?"
+  - level: 2
+    title: "DP recurrence"
+    content: "dp[i] = min(dp[i], dp[i - coin] + 1) for each coin. Initialize dp[0] = 0 and dp[i] = infinity for i > 0."
+  - level: 3
+    title: "Bottom-up approach"
+    content: |
+      Create dp array of size amount+1.
+      dp[0] = 0 (0 coins needed for amount 0)
+      For each i from 1 to amount:
+        For each coin in coins:
+          If coin <= i: dp[i] = min(dp[i], dp[i-coin] + 1)
+      Return dp[amount] if not infinity, else -1.
+
+template: |
+  func coinChange(coins []int, amount int) int {
+      // Your code here
+      // Hint: Use dynamic programming
+      // dp[i] = minimum coins needed to make amount i
+      // Example: coins = [1,5,11], amount = 11 → answer is 1 (one 11-coin)
+      return -1
+  }
+
+test_cases:
+  - params: [[[1, 5, 11], 11]]
+    expected: 1
+    description: "Single coin matches exactly"
+  - params: [[[2], 3]]
+    expected: -1
+    description: "Impossible amount"
+  - params: [[[1], 0]]
+    expected: 0
+    description: "Zero amount"
+  - params: [[[1, 2, 5], 11]]
+    expected: 3
+    description: "5 + 5 + 1 = 11 (3 coins)"
+  - params: [[[186, 419, 83, 408], 6249]]
+    expected: 20
+    description: "Larger case"
+
+constraints:
+  - "1 ≤ len(coins) ≤ 12"
+  - "1 ≤ coins[i] ≤ 2³¹ - 1"
+  - "0 ≤ amount ≤ 10⁴"
+
+time_complexity_hint: "O(amount × len(coins))"
+space_complexity_hint: "O(amount)"
+
+solution:
+  code: |
+    func coinChange(coins []int, amount int) int {
+        if amount == 0 {
+            return 0
+        }
+        dp := make([]int, amount+1)
+        for i := 1; i <= amount; i++ {
+            dp[i] = amount + 1 // "infinity"
+        }
+        dp[0] = 0
+        for i := 1; i <= amount; i++ {
+            for _, coin := range coins {
+                if coin <= i && dp[i-coin]+1 < dp[i] {
+                    dp[i] = dp[i-coin] + 1
+                }
+            }
+        }
+        if dp[amount] > amount {
+            return -1
+        }
+        return dp[amount]
+    }
+  approach: "Bottom-up dynamic programming"
+  time_complexity: "O(amount × n)"
+  space_complexity: "O(amount)"

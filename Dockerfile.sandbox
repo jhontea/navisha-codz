@@ -1,0 +1,26 @@
+# Dockerfile.sandbox - Pre-built sandbox image for code execution
+# Build once: docker build -t coding-challenge-sandbox:latest -f Dockerfile.sandbox .
+# Reuse for all executions (no need to download Go tools each time)
+
+FROM golang:1.21-alpine
+
+# Create a non-root user for running code
+RUN adduser -D -u 1000 runner
+
+# Pre-warm Go module cache with common dependencies
+RUN go env -w GO111MODULE=on && \
+    go env -w GOPROXY=https://proxy.golang.org,direct
+
+# Set up workspace
+WORKDIR /app
+RUN chown runner:runner /app
+
+# Pre-compile common standard library packages to speed up execution
+RUN go build -o /dev/null std 2>/dev/null || true
+
+# Switch to non-root user
+USER runner
+
+# Default: run the mounted code
+ENTRYPOINT ["/bin/sh", "-c"]
+CMD ["cd /app && go run main.go"]
